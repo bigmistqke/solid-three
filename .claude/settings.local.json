@@ -4,7 +4,10 @@
       "Bash(grep:*)",
       "Bash(mkdir:*)",
       "Bash(mv:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(pnpm test:*)",
+      "Bash(rm:*)",
+      "Bash(pnpm --filter solid-three build)"
     ],
     "deny": []
   }
