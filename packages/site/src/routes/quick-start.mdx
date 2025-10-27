@@ -6,93 +6,270 @@ title: Quick Start
 
 This guide will walk you through creating your first 3D scene with solid-three.
 
+## Prerequisites
+
+> **Before You Start**: Make sure you have solid-three and three.js installed:
+> ```bash
+> npm install solid-three three
+> ```
+
 ## Basic Setup
 
-First, import the necessary components from solid-three and three.js:
+Let's start by importing the necessary components:
 
-```tsx
+```tsx tab title="app.tsx"
 import { Canvas, createT } from "solid-three";
 import * as THREE from "three";
 
 // Create the T namespace for typed components
 const T = createT(THREE);
+
+export function App() {
+  return (
+    <div style={{ width: "100vw", height: "100vh" }}>
+      <Canvas>
+        {/* Your 3D scene goes here */}
+      </Canvas>
+    </div>
+  );
+}
+```
+
+```tsx tab title="types (optional)"
+// If using TypeScript, you can create a typed T namespace
+import { createT } from "solid-three";
+import * as THREE from "three";
+
+export const T = createT(THREE);
 ```
 
 ## Your First Scene
 
-Here's a simple spinning cube example:
+Let's build a simple spinning cube step by step:
 
-```tsx
-import { createSignal } from "solid-js";
-import { Canvas, createT, useFrame } from "solid-three";
-import * as THREE from "three";
-
-const T = createT(THREE);
-
-function SpinningCube() {
-  const [rotation, setRotation] = createSignal(0);
-  
-  useFrame((state, delta) => {
-    setRotation(r => r + delta);
-  });
-  
-  return (
-    <T.Mesh rotation-y={rotation()}>
-      <T.BoxGeometry args={[1, 1, 1]} />
-      <T.MeshStandardMaterial color="hotpink" />
-    </T.Mesh>
-  );
-}
-
-function App() {
+```tsx tab title="Static Cube"
+function StaticCube() {
   return (
     <Canvas>
+      {/* Add some lights */}
       <T.AmbientLight intensity={0.5} />
       <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
-      <SpinningCube />
+      
+      {/* Create a cube */}
+      <T.Mesh>
+        <T.BoxGeometry args={[1, 1, 1]} />
+        <T.MeshStandardMaterial color="hotpink" />
+      </T.Mesh>
     </Canvas>
   );
 }
 ```
 
-## Understanding the Code
+```tsx tab title="Spinning Cube"
+import { createSignal } from "solid-js";
+import { useFrame } from "solid-three";
 
-1. **Canvas**: The root component that sets up the WebGL renderer and scene
-2. **T namespace**: Created with `createT(THREE)` to provide typed three.js components
-3. **Lights**: AmbientLight provides overall illumination, DirectionalLight creates shadows
-4. **Mesh**: The basic 3D object that combines geometry and material
-5. **useFrame**: Hook that runs on every frame for animations
-6. **Reactive props**: The `rotation-y` prop updates reactively based on the signal
+function SpinningCube() {
+  const [rotation, setRotation] = createSignal(0);
+  
+  // Animation hook - runs every frame
+  useFrame((state, delta) => {
+    setRotation(r => r + delta);
+  });
+  
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+      
+      <T.Mesh rotation-y={rotation()}>
+        <T.BoxGeometry args={[1, 1, 1]} />
+        <T.MeshStandardMaterial color="hotpink" />
+      </T.Mesh>
+    </Canvas>
+  );
+}
+```
 
-## Two Ways to Create Objects
+```tsx tab title="Interactive Cube"
+import { createSignal } from "solid-js";
 
-solid-three provides two ways to create three.js objects:
+function InteractiveCube() {
+  const [hovered, setHovered] = createSignal(false);
+  const [clicked, setClicked] = createSignal(false);
+  
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+      
+      <T.Mesh
+        scale={clicked() ? 1.5 : hovered() ? 1.1 : 1}
+        onClick={() => setClicked(!clicked())}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+      >
+        <T.BoxGeometry args={[1, 1, 1]} />
+        <T.MeshStandardMaterial 
+          color={clicked() ? "red" : hovered() ? "hotpink" : "orange"} 
+        />
+      </T.Mesh>
+    </Canvas>
+  );
+}
+```
 
-### Using T Components (Recommended for Apps)
+## Understanding the Components
+
+> **Key Concepts**: Each piece of your 3D scene is a component that maps directly to a three.js object:
+
+| Component | Purpose | Three.js Equivalent |
+|-----------|---------|---------------------|
+| `<Canvas>` | Root renderer | `WebGLRenderer` + `Scene` |
+| `<T.Mesh>` | 3D object | `THREE.Mesh` |
+| `<T.BoxGeometry>` | Shape definition | `THREE.BoxGeometry` |
+| `<T.MeshStandardMaterial>` | Surface properties | `THREE.MeshStandardMaterial` |
+| `<T.AmbientLight>` | Overall lighting | `THREE.AmbientLight` |
+| `<T.DirectionalLight>` | Directional lighting | `THREE.DirectionalLight` |
+
+<details>
+<summary>How Props Work</summary>
+
+Props map directly to three.js object properties:
+- `position={[x, y, z]}` → `object.position.set(x, y, z)`
+- `rotation-y={angle}` → `object.rotation.y = angle`
+- `scale={factor}` → `object.scale.setScalar(factor)`
+- `color="red"` → `material.color.set("red")`
+
+</details>
+
+## Two Approaches: Entity vs T
+
+> **Choose Your Style**: T namespace for applications, Entity for libraries. Both approaches are fully equivalent in functionality.
+
+> **Performance**: Both approaches have identical performance characteristics. Choose based on your development preferences.
+
+### T Namespace (Recommended)
+Best for applications with great TypeScript support and clean, component-like syntax.
 
 ```tsx
 const T = createT(THREE);
 
-<T.Mesh>
+<T.Mesh position={[0, 1, 0]}>
   <T.BoxGeometry args={[1, 1, 1]} />
   <T.MeshStandardMaterial color="red" />
 </T.Mesh>
 ```
 
-### Using Entity (Recommended for Libraries)
+### Entity Approach  
+Best for libraries and when working with dynamic object types. No namespace creation required.
 
 ```tsx
-import { Entity } from "solid-three";
-
-<Entity from={THREE.Mesh}>
+<Entity from={THREE.Mesh} position={[0, 1, 0]}>
   <Entity from={THREE.BoxGeometry} args={[1, 1, 1]} />
-  <Entity from={THREE.MeshStandardMaterial} args={["red"]} />
+  <Entity from={THREE.MeshStandardMaterial} color="red" />
 </Entity>
 ```
 
-## What's Next?
+> **Performance Tip**: For high-frequency updates (like animations), consider using refs instead of signals:
+> ```tsx
+> function PerformantAnimation() {
+>   let meshRef;
+>   
+>   useFrame((_, delta) => {
+>     if (meshRef) {
+>       meshRef.rotation.y += delta;
+>     }
+>   });
+>   
+>   return <T.Mesh ref={meshRef}>...</T.Mesh>;
+> }
+> ```
 
-- Learn about the [Canvas](/api/canvas) component and its configuration options
-- Explore [Hooks](/api/hooks/use-three) for accessing the three.js context
-- Understand the [Event System](/api/events/overview) for user interactions
-- Check out [Examples](/examples/basic) for more complex scenes
+## Common Patterns
+
+> **Scaling Up**: As your scenes grow, these patterns help organize and manage multiple objects efficiently.
+
+```tsx tab title="Array Pattern"
+// Generate multiple objects from data
+function MultipleBoxes() {
+  const positions = [[-2, 0, 0], [0, 0, 0], [2, 0, 0]];
+  const colors = ["red", "green", "blue"];
+  
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      
+      <For each={positions}>
+        {(pos, i) => (
+          <T.Mesh position={pos}>
+            <T.BoxGeometry />
+            <T.MeshStandardMaterial color={colors[i()]} />
+          </T.Mesh>
+        )}
+      </For>
+    </Canvas>
+  );
+}
+```
+
+```tsx tab title="Component Pattern"
+// Create reusable components for better organization
+function ColoredBox(props) {
+  return (
+    <T.Mesh {...props}>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial color={props.color} />
+    </T.Mesh>
+  );
+}
+
+function Scene() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      
+      <ColoredBox position={[-2, 0, 0]} color="red" />
+      <ColoredBox position={[0, 0, 0]} color="green" />
+      <ColoredBox position={[2, 0, 0]} color="blue" />
+    </Canvas>
+  );
+}
+```
+
+```tsx tab title="Grouping Objects"
+// Group objects to apply transforms together
+function GroupExample() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      
+      <T.Group rotation-y={Math.PI / 4}>
+        <T.Mesh position={[-1, 0, 0]}>
+          <T.BoxGeometry />
+          <T.MeshStandardMaterial color="red" />
+        </T.Mesh>
+        <T.Mesh position={[1, 0, 0]}>
+          <T.SphereGeometry />
+          <T.MeshStandardMaterial color="blue" />
+        </T.Mesh>
+      </T.Group>
+    </Canvas>
+  );
+}
+```
+
+## Next Steps
+
+> **Ready to Build More?** Now that you understand the basics, explore these topics:
+
+1. **[Canvas Configuration](/api/canvas)** - Camera, renderer, and scene options
+2. **[Animation with useFrame](/api/hooks/use-frame)** - Create smooth animations
+3. **[Event Handling](/api/events/overview)** - Add user interactions
+4. **[Loading Assets](/examples/loading)** - Textures, models, and materials
+5. **[Examples](/examples/basic)** - See complete working examples
+
+> **Pro Tip**: Start with the [Basic Examples](/examples/basic) to see complete, working scenes you can copy and modify!

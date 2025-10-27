@@ -6,38 +6,97 @@ title: Event Types
 
 solid-three provides a comprehensive set of event handlers that mirror DOM events but work with 3D objects in your scene.
 
-## Supported Events
+> **Pointer vs Mouse**: Prefer pointer events over mouse events for better touch device compatibility.
 
-### Click Events
+> **Performance**: Use event delegation on parent groups when possible to reduce individual event handlers.
 
-- **onClick**: Fired when clicking on an object
-- **onClickMissed**: Fired when a click doesn't hit any objects with onClick handlers
-- **onDoubleClick**: Fired when double-clicking on an object
-- **onDoubleClickMissed**: Fired when a double-click doesn't hit any objects with onDoubleClick handlers
-- **onContextMenu**: Fired when right-clicking on an object
-- **onContextMenuMissed**: Fired when a right-click doesn't hit any objects with onContextMenu handlers
+## Event Categories
 
-### Mouse Events
+```tsx tab title="Click Events"
+// Basic click interactions
+function ClickExample() {
+  return (
+    <T.Mesh
+      onClick={(e) => console.log("Single click", e.point)}
+      onDoubleClick={(e) => console.log("Double click", e.point)}
+      onContextMenu={(e) => console.log("Right click", e.point)}
+    >
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  )
+}
 
-- **onMouseDown**: Fired when mouse button is pressed
-- **onMouseUp**: Fired when mouse button is released
-- **onMouseMove**: Fired when mouse moves over object
-- **onMouseEnter**: Fired when mouse enters object
-- **onMouseLeave**: Fired when mouse leaves object
+// Missed events (when clicking empty space)
+<Canvas
+  onClickMissed={() => console.log("Clicked empty space")}
+  onDoubleClickMissed={() => console.log("Double clicked empty space")}
+  onContextMenuMissed={() => console.log("Right clicked empty space")}
+>
+```
 
-### Pointer Events (Recommended)
+```tsx tab title="Pointer Events (Recommended)"
+// Better for touch devices
+function PointerExample() {
+  const [state, setState] = createSignal("normal")
+  
+  return (
+    <T.Mesh
+      onPointerDown={() => setState("pressed")}
+      onPointerUp={() => setState("released")}
+      onPointerEnter={() => setState("hovered")}
+      onPointerLeave={() => setState("normal")}
+      onPointerMove={(e) => console.log("Pointer at:", e.point)}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial color={{
+        pressed: "red",
+        hovered: "hotpink", 
+        normal: "orange"
+      }[state()]} />
+    </T.Mesh>
+  )
+}
+```
 
-- **onPointerDown**: Fired when pointer is pressed
-- **onPointerUp**: Fired when pointer is released
-- **onPointerMove**: Fired when pointer moves
-- **onPointerEnter**: Fired when pointer enters object
-- **onPointerLeave**: Fired when pointer leaves object
-- **onPointerOver**: Fired when pointer is over object (similar to enter but fires on every frame)
-- **onPointerOut**: Fired when pointer leaves object (similar to leave but fires on every frame)
+```tsx tab title="Mouse Events"
+// Traditional mouse events
+function MouseExample() {
+  return (
+    <T.Mesh
+      onMouseDown={(e) => console.log("Mouse down", e.button)}
+      onMouseUp={(e) => console.log("Mouse up", e.button)}
+      onMouseMove={(e) => console.log("Mouse move", e.point)}
+      onMouseEnter={() => console.log("Mouse enter")}
+      onMouseLeave={() => console.log("Mouse leave")}
+    >
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  )
+}
+```
 
-### Other Events
-
-- **onWheel**: Fired on mouse wheel events
+```tsx tab title="Special Events"
+// Wheel and other events
+function SpecialExample() {
+  const [scale, setScale] = createSignal(1)
+  
+  return (
+    <T.Mesh
+      scale={scale()}
+      onWheel={(e) => {
+        e.stopPropagation()
+        const delta = e.nativeEvent.deltaY > 0 ? 0.9 : 1.1
+        setScale(s => Math.max(0.1, Math.min(3, s * delta)))
+      }}
+    >
+      <T.SphereGeometry />
+      <T.MeshStandardMaterial wireframe />
+    </T.Mesh>
+  )
+}
+```
 
 ## Event Object
 

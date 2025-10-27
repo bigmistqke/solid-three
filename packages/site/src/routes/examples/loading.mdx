@@ -6,16 +6,22 @@ title: Loading Assets
 
 Examples of loading and using various types of assets in solid-three.
 
-## Loading Textures
+> **Always Use Suspense**: Wrap loading components in Suspense boundaries for proper loading states.
 
-```tsx
+> **Error Handling**: Use ErrorBoundary components to handle failed asset loads gracefully.
+
+> **Performance**: Compress textures and models before deployment. Consider progressive loading for large assets.
+
+## Loading Strategies
+
+```tsx tab title="Basic Texture Loading"
 import { Suspense } from "solid-js"
-import { Canvas, createT, useLoader, Resource } from "solid-three"
+import { Canvas, createT, useLoader } from "solid-three"
 import { TextureLoader } from "three"
 
 const T = createT(THREE)
 
-function TexturedPlane() {
+function BasicTexture() {
   const texture = useLoader(TextureLoader, "/textures/wood.jpg")
   
   return (
@@ -30,7 +36,7 @@ function TextureExample() {
   return (
     <Canvas>
       <Suspense fallback={<LoadingIndicator />}>
-        <TexturedPlane />
+        <BasicTexture />
       </Suspense>
     </Canvas>
   )
@@ -46,10 +52,10 @@ function LoadingIndicator() {
 }
 ```
 
-## Multiple Textures with Resource
+```tsx tab title="Multiple Textures"
+import { Resource } from "solid-three"
 
-```tsx
-function MultiTexturedMaterial() {
+function MultiTexture() {
   return (
     <T.Mesh>
       <T.BoxGeometry />
@@ -75,7 +81,30 @@ function MultiTexturedMaterial() {
 }
 ```
 
-## Loading GLTF Models
+```tsx tab title="GLTF Models"
+
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
+
+function ModelLoader() {
+  const gltf = useLoader(GLTFLoader, "/models/character.glb")
+  
+  return (
+    <Entity 
+      from={gltf().scene} 
+      scale={0.01}
+      position={[0, -1, 0]}
+      traverse={(child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      }}
+    />
+  )
+}
+```
+
+## Model Loading Examples
 
 ```tsx
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"

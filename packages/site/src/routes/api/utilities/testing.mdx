@@ -6,30 +6,139 @@ title: Testing
 
 Available from `"solid-three/testing"` for testing solid-three components.
 
-## Available Utilities
+> **Testing Strategy**: Focus on component behavior rather than THREE.js internals. Use TestCanvas to avoid WebGL context creation in tests.
 
-- **TestCanvas**: A lightweight Canvas component for testing
-- **test**: Testing utilities for solid-three components
+> **Performance**: Mock expensive operations like texture loading and complex geometry for faster test execution.
 
-## TestCanvas
+## Testing Utilities Reference
 
-A minimal Canvas implementation for unit tests that doesn't require a real WebGL context:
+| Utility | Purpose | Use Case |
+|---------|---------|----------|
+| **TestCanvas** | Lightweight Canvas for tests | Unit testing without WebGL |
+| **advanceFrame** | Simulate frame progression | Testing useFrame hooks |
+| **fireEvent** | Trigger 3D object events | Testing interactions |
+| **waitFor** | Async operation waiting | Testing Suspense/loading |
 
-```tsx
+## Testing Scenarios
+
+```tsx tab title="Basic Component Testing"
+// Test component rendering and props
 import { TestCanvas } from "solid-three/testing"
 import { render } from "solid-testing-library"
 
-test("renders a basic mesh", () => {
+test("renders mesh with correct props", () => {
   const { getByTestId } = render(
     <TestCanvas>
-      <T.Mesh data-testid="test-mesh">
+      <T.Mesh data-testid="test-mesh" position={[1, 2, 3]}>
         <T.BoxGeometry />
         <T.MeshBasicMaterial />
       </T.Mesh>
     </TestCanvas>
   )
   
-  expect(getByTestId("test-mesh")).toBeInTheDocument()
+  const mesh = getByTestId("test-mesh")
+  expect(mesh).toBeInTheDocument()
+  expect(mesh.position.toArray()).toEqual([1, 2, 3])
+})
+```
+
+```tsx tab title="Hook Testing"
+// Test useFrame and other solid-three hooks
+function AnimatedComponent() {
+  const [rotation, setRotation] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    setRotation(r => r + delta)
+  })
+  
+  return (
+    <T.Mesh rotation-y={rotation()} data-testid="animated-mesh">
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  )
+}
+
+test("useFrame updates rotation", async () => {
+  const { getByTestId } = render(
+    <TestCanvas>
+      <AnimatedComponent />
+    </TestCanvas>
+  )
+  
+  const mesh = getByTestId("animated-mesh")
+  const initialRotation = mesh.rotation.y
+  
+  await advanceFrame(0.016) // 16ms frame
+  
+  expect(mesh.rotation.y).toBeGreaterThan(initialRotation)
+})
+```
+
+```tsx tab title="Event Testing"
+// Test 3D object interactions
+function InteractiveBox() {
+  const [clicked, setClicked] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      onClick={() => setClicked(true)}
+      data-testid="clickable-box"
+      scale={clicked() ? 1.5 : 1}
+    >
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial color={clicked() ? "red" : "blue"} />
+    </T.Mesh>
+  )
+}
+
+test("handles click events", async () => {
+  const { getByTestId } = render(
+    <TestCanvas>
+      <InteractiveBox />
+    </TestCanvas>
+  )
+  
+  const mesh = getByTestId("clickable-box")
+  
+  await fireEvent.click(mesh)
+  
+  expect(mesh.scale.x).toBe(1.5)
+  expect(mesh.material.color.getHex()).toBe(0xff0000)
+})
+```
+
+```tsx tab title="Async Loading Testing"
+// Test Suspense and resource loading
+function AsyncComponent() {
+  const texture = useLoader(TextureLoader, "/test-texture.jpg")
+  
+  return (
+    <T.Mesh data-testid="textured-mesh">
+      <T.PlaneGeometry />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+
+test("handles async loading with Suspense", async () => {
+  const { getByTestId, queryByText } = render(
+    <TestCanvas>
+      <Suspense fallback={<div>Loading...</div>}>
+        <AsyncComponent />
+      </Suspense>
+    </TestCanvas>
+  )
+  
+  // Initially shows loading
+  expect(queryByText("Loading...")).toBeInTheDocument()
+  
+  // Wait for texture to load
+  await waitFor(() => {
+    expect(getByTestId("textured-mesh")).toBeInTheDocument()
+  })
+  
+  expect(queryByText("Loading...")).not.toBeInTheDocument()
 })
 ```
 

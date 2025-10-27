@@ -6,28 +6,25 @@ title: Event Examples
 
 Examples demonstrating the event system in solid-three.
 
-## Basic Interactions
+> **Event Bubbling**: Events bubble up through the scene graph by default. Use `e.stopPropagation()` to prevent this.
 
-```tsx
+> **Performance Tip**: Use event delegation on parent groups when possible instead of individual handlers on many objects.
+
+## Interaction Patterns
+
+```tsx tab title="Hover Effects"
 import { createSignal } from "solid-js"
 import { Canvas, createT } from "solid-three"
 import * as THREE from "three"
 
 const T = createT(THREE)
 
-function InteractiveBox() {
+function HoverInteraction() {
   const [hovered, setHovered] = createSignal(false)
-  const [clicked, setClicked] = createSignal(false)
-  const [position, setPosition] = createSignal([0, 0, 0])
   
   return (
     <T.Mesh
-      position={position()}
-      scale={clicked() ? 1.5 : hovered() ? 1.1 : 1}
-      onClick={(e) => {
-        setClicked(!clicked())
-        console.log("Clicked at:", e.point)
-      }}
+      scale={hovered() ? 1.1 : 1}
       onPointerEnter={(e) => {
         setHovered(true)
         document.body.style.cursor = 'pointer'
@@ -36,9 +33,51 @@ function InteractiveBox() {
         setHovered(false)
         document.body.style.cursor = 'default'
       }}
-      onPointerDown={(e) => {
-        console.log("Pointer down on:", e.object.name)
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial 
+        color={hovered() ? "hotpink" : "orange"} 
+      />
+    </T.Mesh>
+  )
+}
+```
+
+```tsx tab title="Click Interactions"
+function ClickInteraction() {
+  const [clicked, setClicked] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      scale={clicked() ? 1.5 : 1}
+      onClick={(e) => {
+        setClicked(!clicked())
+        console.log("Clicked at:", e.point)
       }}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial 
+        color={clicked() ? "red" : "blue"} 
+      />
+    </T.Mesh>
+  )
+}
+```
+
+```tsx tab title="Combined States"
+function CombinedInteraction() {
+  const [hovered, setHovered] = createSignal(false)
+  const [clicked, setClicked] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      scale={clicked() ? 1.5 : hovered() ? 1.1 : 1}
+      onClick={(e) => {
+        setClicked(!clicked())
+        console.log("Clicked at:", e.point)
+      }}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       <T.BoxGeometry />
       <T.MeshStandardMaterial 

@@ -6,36 +6,32 @@ title: Portal
 
 The Portal component allows you to place children outside the regular scene graph while maintaining reactive updates. This is useful for rendering objects into different scenes or bypassing the normal parent-child relationships.
 
-## Props
+> **When to Use Portal**: Use when you need to bypass normal scene hierarchy, render UI overlays, or manage complex multi-scene compositions.
 
-- **element**: Optional three.js object to render into. If not provided, renders into the root scene
-- **children**: Elements to render in the portal
+> **Performance**: Portals maintain reactivity but can affect render order. Use sparingly for optimal performance.
 
-## TypeScript Interface
+## Props Reference
 
-```typescript
-type PortalProps<T extends Object3D> = ParentProps<{
-  element?: T | Meta<T>
-  onUpdate?(value: T): void
-}>
-```
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| **element** | `Object3D \| Meta<Object3D>` | root scene | Target object to render children into |
+| **children** | `JSX.Element` | - | Elements to render in the portal |
+| **onUpdate** | `(value: T) => void` | - | Callback when portal element updates |
 
-## Basic Example
+## Decision Matrix
 
-```tsx
-<Portal element={uiScene}>
-  <T.Mesh position={[2, 0, 0]}>
-    <T.SphereGeometry args={[15, 32, 16]} />
-    <T.MeshBasicMaterial color="red" />
-  </T.Mesh>
-</Portal>
-```
+| Use Case | Portal | Normal Hierarchy |
+|----------|--------|------------------|
+| **UI Overlays** | ✅ Best choice | ❌ Inherits transforms |
+| **Multi-scene Setup** | ✅ Best choice | ❌ Not possible |
+| **Bypass Transforms** | ✅ Best choice | ❌ Inherits parent |
+| **Simple Grouping** | ❌ Overkill | ✅ Better performance |
+| **Normal 3D Objects** | ❌ Unnecessary | ✅ Recommended |
 
-## Use Cases
+## Common Use Cases
 
-### Rendering UI in Separate Scene
-
-```tsx
+```tsx tab title="UI Overlays"
+// Perfect for HUD elements that shouldn't inherit 3D transforms
 function UIOverlay() {
   const uiScene = new THREE.Scene()
   const uiCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -48,7 +44,7 @@ function UIOverlay() {
         <T.MeshStandardMaterial />
       </T.Mesh>
       
-      {/* UI rendered in separate scene */}
+      {/* UI rendered in separate scene - no 3D transforms */}
       <Portal element={uiScene}>
         <T.Sprite position={[0.8, 0.8, 0]}>
           <T.SpriteMaterial color="white" />
@@ -59,9 +55,8 @@ function UIOverlay() {
 }
 ```
 
-### Bypassing Scene Hierarchy
-
-```tsx
+```tsx tab title="Bypass Hierarchy"
+// Escape parent transforms when needed
 function ComplexScene() {
   const specialGroup = new THREE.Group()
   
@@ -84,16 +79,15 @@ function ComplexScene() {
 }
 ```
 
-### Managing Complex Compositions
-
-```tsx
+```tsx tab title="Multi-Scene Setup"
+// Complex rendering pipelines with multiple scenes
 function MultiSceneSetup() {
   const backgroundScene = new THREE.Scene()
   const foregroundScene = new THREE.Scene()
   
   return (
     <>
-      {/* Background elements */}
+      {/* Background layer */}
       <Portal element={backgroundScene}>
         <T.Mesh scale={10}>
           <T.PlaneGeometry />
@@ -103,7 +97,7 @@ function MultiSceneSetup() {
       
       {/* Main scene content */}
       <T.Group>
-        {/* ... main content ... */}
+        {/* Primary 3D content here */}
       </T.Group>
       
       {/* Foreground overlay */}

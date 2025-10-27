@@ -6,13 +6,19 @@ title: autodispose
 
 The `autodispose` utility ensures that three.js objects are properly disposed when components unmount, preventing memory leaks.
 
-## When to Use
+> **Memory Leak Prevention**: Always use autodispose when creating THREE.js objects manually to prevent GPU memory leaks.
 
-Use `autodispose` when:
-- Creating THREE.js objects manually with `new`
-- Passing instances to `<Entity from={instance} />`
-- Working with conditional rendering
-- Sharing resources between components
+> **Automatic Cleanup**: autodispose hooks into SolidJS's cleanup system to dispose resources when components unmount.
+
+## When autodispose is Required
+
+| Scenario | Need autodispose? | Why |
+|----------|-------------------|-----|
+| **T components** | ❌ No | Automatic disposal built-in |
+| **Manual object creation** | ✅ Yes | No automatic cleanup |
+| **Entity with instances** | ✅ Yes | Manual instances need disposal |
+| **Conditional rendering** | ✅ Yes | Prevents orphaned resources |
+| **Shared resources** | ✅ Yes | Ensures proper cleanup timing |
 
 ## Basic Usage
 
@@ -31,41 +37,58 @@ function ManualObjects() {
 }
 ```
 
-## Conditional Rendering
+## Common Usage Patterns
 
-### ❌ Wrong - Memory Leak
-
-Without `autodispose`, resources remain in memory after unmounting:
-
-```tsx
-function Wrong(props: { shape: "box" | "sphere" }) {
-  const box = new BoxGeometry()
-  const sphere = new SphereGeometry()
+```tsx tab title="❌ Memory Leak (Wrong)"
+// WITHOUT autodispose - resources leak memory
+function MemoryLeak(props: { shape: "box" | "sphere" }) {
+  const box = new BoxGeometry()      // ❌ Never disposed
+  const sphere = new SphereGeometry() // ❌ Never disposed
   
   return (
     <Show when={props.shape === "box"} fallback={<Entity from={sphere} />}>
       <Entity from={box} />
     </Show>
   )
-  // ❌ Memory leak: geometries are never disposed
+  // ❌ Problem: Objects remain in GPU memory forever
 }
 ```
 
-### ✅ Correct - Automatic Disposal
-
-```tsx
-function Correct(props: { shape: "box" | "sphere" }) {
-  const box = autodispose(new BoxGeometry())
-  const sphere = autodispose(new SphereGeometry())
+```tsx tab title="✅ Proper Cleanup (Correct)"
+// WITH autodispose - automatic cleanup
+function ProperCleanup(props: { shape: "box" | "sphere" }) {
+  const box = autodispose(new BoxGeometry())      // ✅ Auto-disposed
+  const sphere = autodispose(new SphereGeometry()) // ✅ Auto-disposed
   
   return (
     <Show when={props.shape === "box"} fallback={<Entity from={sphere} />}>
       <Entity from={box} />
     </Show>
   )
-  // ✅ Resources are automatically disposed when component cleans up
+  // ✅ Solution: Resources cleaned up when component unmounts
 }
 ```
+
+```tsx tab title="Shared Resources"
+// Efficient resource sharing with proper cleanup
+function SharedResources() {
+  // Single geometry/material shared across multiple meshes
+  const geometry = autodispose(new SphereGeometry(0.3, 16, 16))
+  const material = autodispose(new MeshStandardMaterial({ color: 'red' }))
+  
+  return (
+    <>
+      {Array.from({ length: 10 }).map((_, i) => (
+        <Entity 
+          from={new Mesh(geometry, material)}
+          position={[i * 2, 0, 0]}
+          key={i}
+        />
+      ))}
+    </>
+  )
+  // ✅ Shared resources disposed once when component unmounts
+}
 
 ## Shared Resources
 

@@ -6,31 +6,36 @@ title: Metadata
 
 These utilities help manage metadata associated with THREE.js objects in solid-three.
 
-## Available Functions
+> **Advanced Usage**: These utilities are primarily for debugging, library development, and advanced use cases.
 
-- **getMeta(object)**: Get metadata associated with a THREE.js object
-- **hasMeta(object)**: Check if an object has metadata
-- **meta**: WeakMap storing object metadata
-- **$S3C**: Symbol used internally for component metadata
+> **Internal System**: solid-three uses metadata internally to track component relationships and manage lifecycles.
 
-## Basic Usage
+## API Reference
 
-```tsx
+| Function | Type | Description |
+|----------|------|-------------|
+| **getMeta** | `(object: Object3D) => any` | Get metadata for a THREE.js object |
+| **hasMeta** | `(object: Object3D) => boolean` | Check if object has metadata |
+| **meta** | `WeakMap` | Internal metadata storage |
+| **$S3C** | `Symbol` | Internal symbol for component metadata |
+
+## Usage Patterns
+
+```tsx tab title="Debugging Objects"
 import { getMeta, hasMeta } from "solid-three"
 
-function InspectObject() {
+function DebugInspector() {
   let meshRef
   
   const inspectMesh = () => {
     const mesh = meshRef
     
-    // Check if an object has solid-three metadata
     if (hasMeta(mesh)) {
       const metadata = getMeta(mesh)
       console.log("Object metadata:", metadata)
       console.log("Component type:", metadata?.[$S3C]?.type)
     } else {
-      console.log("No metadata found")
+      console.log("No solid-three metadata found")
     }
   }
   
@@ -40,11 +45,52 @@ function InspectObject() {
         <T.BoxGeometry />
         <T.MeshBasicMaterial />
       </T.Mesh>
-      
-      <button onClick={inspectMesh}>
-        Inspect Mesh
-      </button>
+      <button onClick={inspectMesh}>Inspect Object</button>
     </>
+  )
+}
+```
+
+```tsx tab title="Custom Metadata"
+// Add your own metadata to objects
+function CustomMetadata() {
+  let objectRef
+  
+  onMount(() => {
+    const object = objectRef
+    if (object) {
+      const existingMeta = getMeta(object) || {}
+      meta.set(object, {
+        ...existingMeta,
+        customId: "my-object-123",
+        createdAt: Date.now(),
+        userData: { type: "interactive" }
+      })
+    }
+  })
+  
+  return <T.Group ref={objectRef}>{/* children */}</T.Group>
+}
+```
+
+```tsx tab title="Scene Analysis"
+// Analyze entire scene metadata
+function SceneAnalyzer() {
+  const three = useThree()
+  
+  const analyzeScene = () => {
+    three.scene.traverse((object) => {
+      if (hasMeta(object)) {
+        const metadata = getMeta(object)
+        console.log(`${object.name || object.id}:`, metadata)
+      }
+    })
+  }
+  
+  return (
+    <button onClick={analyzeScene}>
+      Analyze Scene Metadata
+    </button>
   )
 }
 ```

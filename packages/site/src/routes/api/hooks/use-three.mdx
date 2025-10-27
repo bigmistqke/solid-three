@@ -6,21 +6,27 @@ title: useThree
 
 Provides access to the `three.js` context, including the renderer, scene, camera, and more. This hook can be used with or without a selector function for optimized access to specific properties.
 
-## Returns
+> **Performance**: Use selector functions to avoid unnecessary re-renders when only specific properties are needed.
 
-- **bounds** (`Measure`): Reactive canvas bounds measurement
-- **camera** (`Camera`): The current camera
-- **setCamera** (`(camera: Camera) => () => void`): A setter-function for setting the current camera
-- **canvas** (`HTMLCanvasElement`): The canvas DOM element
-- **clock** (`Clock`): The `three.js` clock for timing
-- **dpr** (`number`): Device pixel ratio
-- **gl** (`WebGLRenderer`): The WebGL renderer instance
-- **raycaster** (`Raycaster`): The current raycaster used for pointer events
-- **setRaycaster** (`(raycaster: Raycaster) => () => void`): A setter-function for setting the current raycaster
-- **render** (`(delta: number) => void`): Function to manually trigger a render
-- **requestRender** (`() => void`): Function to request a render on the next frame
-- **scene** (`Scene`): The root scene
-- **xr** (`{ connect: () => void; disconnect: () => void }`): WebXR connection management
+> **Stack Management**: Cameras and raycasters use a stack system for temporary overrides that automatically restore previous values.
+
+## Context Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| **bounds** | `Measure` | Reactive canvas bounds measurement |
+| **camera** | `Camera` | The current active camera |
+| **setCamera** | `Function` | Push camera to stack (returns cleanup) |
+| **canvas** | `HTMLCanvasElement` | The canvas DOM element |
+| **clock** | `Clock` | THREE.js clock for timing |
+| **dpr** | `number` | Device pixel ratio |
+| **gl** | `WebGLRenderer` | WebGL renderer instance |
+| **raycaster** | `Raycaster` | Current raycaster for events |
+| **setRaycaster** | `Function` | Push raycaster to stack (returns cleanup) |
+| **render** | `Function` | Manually trigger a render |
+| **requestRender** | `Function` | Request render on next frame |
+| **scene** | `Scene` | The root scene |
+| **xr** | `Object` | WebXR connection management |
 
 ## Camera and Raycaster Stack System
 
@@ -32,9 +38,10 @@ Provides access to the `three.js` context, including the renderer, scene, camera
 - **Push To The Stack To Become Active**: By calling `setCamera(camera)` and `setRaycaster(raycaster)`, the camera/raycaster is pushed to the stack. This causes it to become the currently active camera/raycaster
 - **Pop From The Stack To Deactivate**: `setCamera(camera)` and `setRaycaster(raycaster)` return a cleanup-function to pop the camera/raycaster from the stack. If the camera/raycaster was on top of the stack, the previous camera/raycaster in the stack becomes active again
 
-## Basic Usage
+## Usage Patterns
 
-```tsx
+```tsx tab title="Basic Access"
+// Access full context
 const three = useThree()
 
 createEffect(() => {
@@ -44,51 +51,68 @@ createEffect(() => {
 })
 ```
 
-## Camera Switching Example
-
-```tsx
-const three = useThree()
-const [useOrtho, setUseOrtho] = createSignal(false)
-
-createEffect(() => {
-  if (useOrtho()) {
-    const orthoCamera = new OrthographicCamera(-5, 5, 5, -5, 0.1, 1000)
-    orthoCamera.position.set(0, 0, 5)
-
-    // Push ortho camera onto stack
-    const restore = three.setCamera(orthoCamera)
-
-    // Cleanup automatically restores previous camera
-    onCleanup(restore)
-  }
-})
-```
-
-## Selective Access with Selector
-
-For better performance, you can use a selector function to access only specific properties:
-
-```tsx
-// Only access the camera - won't rerun when other properties change
+```tsx tab title="Selective Access (Performance)"
+// Only access specific properties for better performance
 const camera = useThree(state => state.camera)
-
-// Access multiple properties
 const { gl, scene } = useThree(state => ({ 
   gl: state.gl, 
   scene: state.scene 
 }))
+
+// This component only re-renders when camera changes
+function CameraInfo() {
+  const camera = useThree(state => state.camera)
+  return <div>Camera: {camera.type}</div>
+}
 ```
 
-## Manual Rendering
+```tsx tab title="Camera Stack Management"
+// Temporary camera switching with automatic restoration
+function TemporaryCameraSwitch() {
+  const three = useThree()
+  const [useOrtho, setUseOrtho] = createSignal(false)
 
-Control when the scene renders:
+  createEffect(() => {
+    if (useOrtho()) {
+      const orthoCamera = new OrthographicCamera(-5, 5, 5, -5, 0.1, 1000)
+      orthoCamera.position.set(0, 0, 5)
 
-```tsx
-const three = useThree()
+      // Push ortho camera onto stack
+      const restore = three.setCamera(orthoCamera)
 
-// Request a single render on next frame
-three.requestRender()
+      // Cleanup automatically restores previous camera
+      onCleanup(restore)
+    }
+  })
+  
+  return (
+    <button onClick={() => setUseOrtho(!useOrtho())}>
+      {useOrtho() ? "Use Perspective" : "Use Orthographic"}
+    </button>
+  )
+}
+```
 
-// Manually render with a specific delta time
-three.render(0.016) // 16ms delta
+```tsx tab title="Manual Rendering Control"
+// For frameloop="demand" or custom render timing
+function ManualRenderControl() {
+  const three = useThree()
+  
+  const triggerRender = () => {
+    // Request a single render on next frame
+    three.requestRender()
+  }
+  
+  const manualRender = () => {
+    // Manually render with specific delta time
+    three.render(0.016) // 16ms delta
+  }
+  
+  return (
+    <>
+      <button onClick={triggerRender}>Request Render</button>
+      <button onClick={manualRender}>Manual Render</button>
+    </>
+  )
+}
 ```

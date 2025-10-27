@@ -6,14 +6,17 @@ title: Event System Overview
 
 `solid-three` provides a comprehensive event system that integrates three.js pointer and mouse events with SolidJS's reactive system.
 
-## How It Works
+> **Automatic Raycasting**: Events are automatically raycast against 3D objects without manual setup.
 
-The event system automatically:
-- Performs raycasting on pointer/mouse events
-- Determines which objects are hit
-- Propagates events through the scene graph
-- Handles event bubbling and capturing
-- Manages hover states
+> **Performance**: Raycasting only occurs when pointer/mouse events happen, not every frame.
+
+## How the Event System Works
+
+1. **Raycasting**: Cast ray from camera through pointer position
+2. **Hit Detection**: Determine which 3D objects intersect the ray
+3. **Event Creation**: Create enhanced event objects with 3D information
+4. **Propagation**: Bubble events through scene graph hierarchy
+5. **State Management**: Track hover states and interaction changes
 
 ## Basic Usage
 

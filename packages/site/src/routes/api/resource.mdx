@@ -6,33 +6,25 @@ title: Resource
 
 Wrapper component around 'useLoader' hook for declarative resource loading.
 
-## Props
+> **Declarative Loading**: Use Resource for simpler, declarative resource loading directly in JSX. Use useLoader when you need more control.
 
-- **loader**: Three.js loader constructor (e.g., `TextureLoader`, `GLTFLoader`)
-- **url**: URL(s) to load, depending on what the passed loader expects
-- **children**: Optional render function
-- **cache**: Control caching behavior (default: true)
-- **\***: Additional props are passed to the loaded resource
+> **Automatic Caching**: Resources are cached by default for better performance. Disable only for dynamic content.
 
-## Basic Texture Loading
+## Props Reference
 
-```tsx
-// CubeTextureLoader expects an array of strings
-<Resource 
-  loader={CubeTextureLoader} 
-  url={[
-    'px.png', 'nx.png',
-    'py.png', 'ny.png',
-    'pz.png', 'nz.png'
-  ]} 
-/>
-```
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| **loader** | `LoaderConstructor` | - | Three.js loader class (TextureLoader, GLTFLoader, etc.) |
+| **url** | `string \| string[]` | - | URL(s) to load (array for cube textures) |
+| **children** | `(resource: T) => JSX.Element` | - | Optional render function for complex resources |
+| **cache** | `boolean` | `true` | Enable/disable caching |
+| **attach** | `string` | - | Property to attach the resource to on parent |
+| **...props** | `any` | - | Additional props passed to loaded resource |
 
-## Setting Props on Resources
+## Loading Patterns
 
-The `attach` prop is commonly used to attach loaded resources to their parent:
-
-```tsx
+```tsx tab title="Simple Textures"
+// Direct attachment to material properties
 <T.MeshStandardMaterial>
   <Resource loader={TextureLoader} url="diffuse.jpg" attach="map" />
   <Resource loader={TextureLoader} url="normal.jpg" attach="normalMap" />
@@ -40,25 +32,45 @@ The `attach` prop is commonly used to attach loaded resources to their parent:
 </T.MeshStandardMaterial>
 ```
 
-## Custom Rendering with Children Function
+```tsx tab title="Cube Textures"
+// Environment maps and skyboxes
+<T.Scene>
+  <Resource 
+    loader={CubeTextureLoader} 
+    url={[
+      'px.png', 'nx.png',
+      'py.png', 'ny.png',
+      'pz.png', 'nz.png'
+    ]} 
+    attach="background"
+  />
+</T.Scene>
+```
 
-For complex resources like GLTF models, use a children function to control rendering:
-
-```tsx
+```tsx tab title="Complex Models"
+// GLTF models with render functions
 <Resource loader={GLTFLoader} url="model.gltf">
-  {(gltf) => <Entity from={gltf.scene} scale={2} />}
+  {(gltf) => (
+    <Entity 
+      from={gltf.scene} 
+      scale={2}
+      traverse={(child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+        }
+      }}
+    />
+  )}
 </Resource>
 ```
 
-## Disabling Cache
-
-For dynamic resources that change frequently:
-
-```tsx
+```tsx tab title="Dynamic Resources"
+// Disable caching for frequently changing content
 <Resource 
   loader={TextureLoader} 
-  url="/dynamic-texture.png" 
-  cache={false} 
+  url={dynamicTextureUrl()} 
+  cache={false}
+  attach="map"
 />
 ```
 

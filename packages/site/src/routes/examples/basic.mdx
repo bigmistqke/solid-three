@@ -6,9 +6,34 @@ title: Basic Scene Example
 
 This example demonstrates how to create a simple 3D scene with solid-three.
 
-## Complete Example
+> **Starting Simple**: These examples progress from static to interactive to show the reactive patterns in solid-three.
 
-```tsx
+## Building Your First Scene
+
+```tsx tab title="Static Scene"
+import { Canvas, createT } from "solid-three";
+import * as THREE from "three";
+
+const T = createT(THREE);
+
+function StaticScene() {
+  return (
+    <div style={{ width: "100vw", height: "100vh" }}>
+      <Canvas>
+        <T.AmbientLight intensity={0.5} />
+        <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+        
+        <T.Mesh>
+          <T.BoxGeometry args={[1, 1, 1]} />
+          <T.MeshStandardMaterial color="orange" />
+        </T.Mesh>
+      </Canvas>
+    </div>
+  );
+}
+```
+
+```tsx tab title="Interactive Scene"
 import { createSignal } from "solid-js";
 import { Canvas, createT } from "solid-three";
 import * as THREE from "three";
@@ -22,26 +47,26 @@ function Box(props) {
   return (
     <T.Mesh
       {...props}
-      scale={clicked() ? 1.5 : 1}
+      scale={clicked() ? 1.5 : hovered() ? 1.1 : 1}
       onClick={() => setClicked(!clicked())}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       <T.BoxGeometry args={[1, 1, 1]} />
-      <T.MeshStandardMaterial color={hovered() ? "hotpink" : "orange"} />
+      <T.MeshStandardMaterial 
+        color={clicked() ? "red" : hovered() ? "hotpink" : "orange"} 
+      />
     </T.Mesh>
   );
 }
 
-export function BasicScene() {
+function InteractiveScene() {
   return (
     <div style={{ width: "100vw", height: "100vh" }}>
       <Canvas>
-        {/* Lighting */}
         <T.AmbientLight intensity={0.5} />
         <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
         
-        {/* Objects */}
         <Box position={[-1.2, 0, 0]} />
         <Box position={[1.2, 0, 0]} />
       </Canvas>
@@ -50,24 +75,64 @@ export function BasicScene() {
 }
 ```
 
+```tsx tab title="Reusable Components"
+function ReusableBox(props) {
+  const [state, setState] = createSignal("normal");
+
+  return (
+    <T.Mesh
+      {...props}
+      scale={state() === "clicked" ? 1.5 : state() === "hovered" ? 1.1 : 1}
+      onClick={() => setState(s => s === "clicked" ? "normal" : "clicked")}
+      onPointerEnter={() => setState("hovered")}
+      onPointerLeave={() => setState("normal")}
+    >
+      <T.BoxGeometry args={[1, 1, 1]} />
+      <T.MeshStandardMaterial 
+        color={{
+          clicked: "red",
+          hovered: "hotpink",
+          normal: "orange"
+        }[state()]} 
+      />
+    </T.Mesh>
+  );
+}
+
+function ComponentScene() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+      
+      <ReusableBox position={[-2, 0, 0]} />
+      <ReusableBox position={[0, 0, 0]} />
+      <ReusableBox position={[2, 0, 0]} />
+    </Canvas>
+  );
+}
+```
+
 ## Key Concepts
 
-### 1. Canvas Setup
+> **Lighting is Essential**: Without lights, you won't see your objects properly. Always include at least an `AmbientLight` for basic illumination.
+
+### Canvas Setup
 The `Canvas` component creates the WebGL context and manages the render loop. Always wrap your 3D content in a Canvas.
 
-### 2. Lighting
-Without lights, you won't see your objects:
-- `AmbientLight` provides overall illumination
-- `DirectionalLight` creates directional shadows and highlights
+### Lighting Strategy
+- **AmbientLight**: Provides overall illumination without shadows
+- **DirectionalLight**: Creates directional shadows and highlights (like sunlight)
 
-### 3. Interactive Components
-The `Box` component demonstrates:
+### Reactive Interactions
+The interactive examples demonstrate:
 - Reactive state with `createSignal`
-- Event handlers (`onClick`, `onPointerOver`, `onPointerOut`)
+- Event handlers for mouse interactions
 - Conditional styling based on state
 
-### 4. Props Spreading
-Notice how we use `{...props}` to pass position and other props to the Mesh component.
+> **Props Spreading**: Notice how we use `{...props}` to pass position and other props to the Mesh component for reusability.
+
+> **Performance Tip**: For simple color changes, direct property updates are fine. For complex animations, consider using refs instead of signals.
 
 ## Try It Yourself
 

@@ -4,18 +4,24 @@ title: Animation Examples
 
 # Animation Examples
 
-Examples of how to create animations using `useFrame` and solid-three's reactive system.
+Learn how to create smooth animations using `useFrame` and solid-three's reactive system.
 
-## Basic Rotation
+> **Animation in solid-three**: solid-three provides the `useFrame` hook that runs before every render, perfect for creating smooth 60fps animations. Combined with SolidJS signals, you get reactive animations that are both performant and easy to reason about.
 
-```tsx
+## Performance Approaches
+
+> **When to Use Each**: Use signals when multiple components need the animated value, use refs for isolated animations.
+
+> **Performance Warning**: Use signals sparingly for high-frequency animations. Direct ref manipulation is faster for pure animation updates.
+
+```tsx tab title="Signal-Based (Reactive)"
 import { createSignal } from "solid-js"
 import { Canvas, createT, useFrame } from "solid-three"
 import * as THREE from "three"
 
 const T = createT(THREE)
 
-function RotatingCube() {
+function ReactiveRotation() {
   const [rotation, setRotation] = createSignal(0)
   
   useFrame((_, delta) => {
@@ -30,12 +36,101 @@ function RotatingCube() {
   )
 }
 
-export function BasicRotation() {
+export function SignalBasedAnimation() {
   return (
     <Canvas>
       <T.AmbientLight intensity={0.5} />
       <T.DirectionalLight position={[5, 5, 5]} />
-      <RotatingCube />
+      <ReactiveRotation />
+    </Canvas>
+  )
+}
+```
+
+```tsx tab title="Ref-Based (Performance)"
+function PerformantRotation() {
+  let meshRef
+  
+  useFrame((_, delta) => {
+    if (meshRef) {
+      meshRef.rotation.y += delta
+    }
+  })
+  
+  return (
+    <T.Mesh ref={meshRef}>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial color="hotpink" />
+    </T.Mesh>
+  )
+}
+
+export function RefBasedAnimation() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      <PerformantRotation />
+    </Canvas>
+  )
+}
+```
+
+<details>
+<summary>When to Use Signals vs Refs</summary>
+
+**Use Signals when:**
+- You need reactive updates in the UI
+- Multiple components depend on the animated value
+- The animation triggers other reactive effects
+
+**Use Refs when:**
+- Pure performance is critical
+- Only the object itself needs to update
+- High-frequency animations (60+ updates/second)
+
+</details>
+
+## Complex Animations
+
+### Multiple Animated Objects
+
+```tsx {13-15,18-20,23-25}
+function AnimatedScene() {
+  const [time, setTime] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    setTime(t => t + delta)
+  })
+  
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.3} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      
+      {/* Rotating cube */}
+      <T.Mesh 
+        position={[-2, 0, 0]}
+        rotation={[time(), time() * 0.5, 0]}
+      >
+        <T.BoxGeometry />
+        <T.MeshStandardMaterial color="red" />
+      </T.Mesh>
+      
+      {/* Bouncing sphere */}
+      <T.Mesh position={[0, Math.sin(time() * 2), 0]}>
+        <T.SphereGeometry args={[0.5]} />
+        <T.MeshStandardMaterial color="blue" />
+      </T.Mesh>
+      
+      {/* Scaling cylinder */}
+      <T.Mesh 
+        position={[2, 0, 0]}
+        scale={[1, 1 + Math.sin(time() * 3) * 0.5, 1]}
+      >
+        <T.CylinderGeometry args={[0.5, 0.5, 1]} />
+        <T.MeshStandardMaterial color="green" />
+      </T.Mesh>
     </Canvas>
   )
 }

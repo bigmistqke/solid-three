@@ -6,23 +6,78 @@ title: Event Propagation
 
 solid-three implements a dual propagation system that combines 3D raycasting with DOM-like event bubbling through the scene graph.
 
-## Dual Propagation System
+> **Two-Phase System**: Understanding both raycast and tree propagation is crucial for complex interactive 3D scenes.
 
-### 1. Raycast Propagation (3D Space)
+> **Performance Impact**: Excessive event bubbling can affect performance. Use `stopPropagation()` strategically.
 
-When you interact with the scene, solid-three casts a ray from the camera through your pointer position into the 3D scene:
+## How Dual Propagation Works
 
-- Events are processed for each intersected object in order from **closest to farthest** from the camera
-- If an object calls `stopPropagation()`, objects further along the ray won't receive the event
-- This respects the visual layering of your 3D scene
+```tsx tab title="Phase 1: Raycast (3D Space)"
+// Ray travels through 3D space, hitting objects in depth order
+<Canvas>
+  <T.Mesh position={[0, 0, 3]} onClick={() => console.log("Hit 1: Closest")}>
+    <T.BoxGeometry />
+    <T.MeshBasicMaterial color="red" />
+  </T.Mesh>
+  
+  <T.Mesh position={[0, 0, 1]} onClick={() => console.log("Hit 2: Middle")}>
+    <T.BoxGeometry />
+    <T.MeshBasicMaterial color="green" />
+  </T.Mesh>
+  
+  <T.Mesh position={[0, 0, -1]} onClick={() => console.log("Hit 3: Farthest")}>
+    <T.BoxGeometry />
+    <T.MeshBasicMaterial color="blue" />
+  </T.Mesh>
+</Canvas>
 
-### 2. Tree Propagation (Scene Graph)
+// Click order: Red → Green → Blue (closest to farthest)
+```
 
-After an object handles an event, it bubbles up through the scene graph hierarchy:
+```tsx tab title="Phase 2: Tree Bubble (Scene Graph)"
+// After raycast, events bubble up the scene hierarchy
+<Canvas onClick={() => console.log("4. Canvas (root)")}>  
+  <T.Group onClick={() => console.log("3. Group (parent)")}>    
+    <T.Mesh onClick={() => console.log("2. Mesh (child)")}>      
+      <T.BoxGeometry onClick={() => console.log("1. Geometry (leaf)")} />      
+      <T.MeshBasicMaterial />
+    </T.Mesh>  
+  </T.Group>
+</Canvas>
 
-- Events bubble from **child → parent** through the object hierarchy
-- If `stopPropagation()` is called, parent objects won't receive the event
-- If no object calls `stopPropagation()`, the event finally bubbles to the `<Canvas/>` component
+// Bubble order: Geometry → Mesh → Group → Canvas
+```
+
+```tsx tab title="Combined Flow"
+// Real-world example showing both phases
+function DualPropagationExample() {
+  return (
+    <Canvas onClick={() => console.log("Final: Canvas")}>
+      <T.Group onClick={() => console.log("Tree: Group bubbled")}>
+        {/* Front object - hit first in raycast */}
+        <T.Mesh 
+          position={[0, 0, 2]} 
+          onClick={() => console.log("Raycast: Front mesh")}
+        >
+          <T.BoxGeometry />
+          <T.MeshBasicMaterial color="red" />
+        </T.Mesh>
+        
+        {/* Back object - hit second in raycast */}
+        <T.Mesh 
+          position={[0, 0, 0]} 
+          onClick={() => console.log("Raycast: Back mesh")}
+        >
+          <T.BoxGeometry />
+          <T.MeshBasicMaterial color="blue" />
+        </T.Mesh>
+      </T.Group>
+    </Canvas>
+  )
+}
+
+// Output: "Front mesh" → "Back mesh" → "Group bubbled" → "Canvas"
+```
 
 ## Visual Example
 

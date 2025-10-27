@@ -6,14 +6,18 @@ title: LoaderCache
 
 LoaderCache is the default cache manager for `useLoader`. It implements the `LoaderRegistry` interface with additional resource management features including automatic reference counting and deferred disposal.
 
-## Features
+> **Memory Management**: LoaderCache automatically tracks resource usage and prevents memory leaks through reference counting.
 
-- **Automatic Reference Counting**: Tracks if a resource is currently in use
-- **Deferred Disposal**: Resources are added to a free list when no longer referenced
-- **Manual Disposal Methods**: Several methods to manage resource disposal
-  - `dispose(loader, path)`: Dispose a resource based on loader and path
-  - `disposeResource(resource)`: Dispose a resource by passing the resource directly
-  - `disposeFreeList()`: Dispose all currently unreferenced resources
+> **Performance**: Resources are cached and reused across components, reducing load times and GPU memory usage.
+
+## Key Features
+
+| Feature | Description | Benefit |
+|---------|-------------|----------|
+| **Reference Counting** | Tracks active resource usage | Automatic cleanup when unused |
+| **Deferred Disposal** | Delays disposal until safe | Prevents premature cleanup |
+| **Free List Management** | Batches disposal operations | Better performance |
+| **Manual Control** | Override automatic behavior | Fine-grained memory control |
 
 ## LoaderRegistry Interface
 
@@ -87,20 +91,34 @@ function SharedResourceExample() {
 }
 ```
 
-## Manual Resource Management
+## Cache Management Strategies
 
-### Dispose Specific Resource
+> **When to Manually Dispose**: Most apps can rely on automatic cleanup, but manual disposal is useful for memory-constrained environments or dynamic content.
 
-```tsx
+```tsx tab title="Automatic (Recommended)"
+// Default behavior - no manual cleanup needed
+function AutomaticExample() {
+  const texture = useLoader(TextureLoader, "texture.jpg")
+  
+  // Resource automatically cleaned up when component unmounts
+  return (
+    <T.Mesh>
+      <T.PlaneGeometry />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+```
+
+```tsx tab title="Manual Disposal"
+// For fine-grained control
 function ManualDisposalExample() {
   const [textureUrl, setTextureUrl] = createSignal("texture1.jpg")
   const texture = useLoader(TextureLoader, textureUrl)
   
   const switchTexture = () => {
-    // Dispose the current texture before switching
+    // Manually dispose current texture
     useLoader.cache.dispose(TextureLoader, textureUrl())
-    
-    // Switch to new texture
     setTextureUrl(textureUrl() === "texture1.jpg" ? "texture2.jpg" : "texture1.jpg")
   }
   
@@ -110,9 +128,27 @@ function ManualDisposalExample() {
         <T.PlaneGeometry />
         <T.MeshBasicMaterial map={texture()} />
       </T.Mesh>
-      
-      <button onClick={switchTexture}>
-        Switch Texture
+      <button onClick={switchTexture}>Switch Texture</button>
+    </>
+  )
+}
+```
+
+```tsx tab title="Batch Cleanup"
+// Clean up all unused resources at once
+function BatchCleanupExample() {
+  const cleanupResources = () => {
+    // Dispose all resources in free list
+    useLoader.cache.disposeFreeList()
+    console.log("Cleaned up unused resources")
+  }
+  
+  return (
+    <button onClick={cleanupResources}>
+      Clean Up Memory
+    </button>
+  )
+}
       </button>
     </>
   )

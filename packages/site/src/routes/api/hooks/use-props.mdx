@@ -6,18 +6,18 @@ title: useProps
 
 The useProps hook manages and applies solid-three props to THREE.js objects. It sets up reactive effects to ensure properties are correctly applied and updated, manages children attachment, and handles automatic disposal.
 
+> **Advanced Hook**: This is primarily for library authors and custom component creation. Most users should use the built-in T components instead.
+
+> **When to Use**: Use when creating reusable solid-three components or integrating third-party three.js libraries.
+
 ## Parameters
 
-- **object**: An accessor function that returns the target THREE.js object
-- **props**: Object containing props to apply (including `ref`, `children`, and THREE.js properties)
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| **object** | `Accessor<T>` | Accessor function returning the target THREE.js object |
+| **props** | `any` | Props to apply (including `ref`, `children`, and THREE.js properties) |
 
-## TypeScript Signature
-
-```typescript
-function useProps<T extends object>(object: Accessor<T>, props: any): void
-```
-
-## Features
+## Key Features
 
 - **Reactive prop updates**: Automatically applies prop changes to the THREE.js object
 - **Ref assignment**: Handles both function refs and object refs
@@ -25,11 +25,11 @@ function useProps<T extends object>(object: Accessor<T>, props: any): void
 - **Automatic disposal**: Cleans up the object when the component unmounts
 - **Special props**: Processes `onUpdate` callbacks after prop applications
 
-## Basic Usage
+## Usage Patterns
 
-This hook is primarily used internally by solid-three components, but can be useful when creating custom components:
+> **Warning**: Only use this hook when creating custom components. For normal usage, prefer the built-in T components.
 
-```tsx
+```tsx tab title="Simple Custom Component"
 import { useProps, autodispose } from "solid-three"
 import { Mesh, BoxGeometry, MeshBasicMaterial } from "three"
 
@@ -48,11 +48,7 @@ function CustomMesh(props) {
 }
 ```
 
-## Advanced Usage - Custom Controls
-
-Creating custom camera controls that integrate with solid-three:
-
-```tsx
+```tsx tab title="Advanced Custom Controls"
 import { useThree, useFrame, useProps, autodispose } from "solid-three"
 import { OrbitControls as ThreeOrbitControls } from "three/examples/jsm/controls/OrbitControls"
 
@@ -73,6 +69,29 @@ export function OrbitControls(props) {
   
   // Apply props reactively
   useProps(controls, props)
+  
+  return null
+}
+```
+
+```tsx tab title="Complex Component"
+function CustomParticleSystem(props) {
+  const particles = createMemo(() => {
+    const geometry = autodispose(new BufferGeometry())
+    const material = autodispose(new PointsMaterial({ size: 2 }))
+    const points = autodispose(new Points(geometry, material))
+    
+    // Setup particle positions
+    const positions = new Float32Array(1000 * 3)
+    for (let i = 0; i < positions.length; i++) {
+      positions[i] = (Math.random() - 0.5) * 10
+    }
+    geometry.setAttribute('position', new BufferAttribute(positions, 3))
+    
+    return points
+  })
+  
+  useProps(particles, props)
   
   return null
 }

@@ -6,18 +6,24 @@ title: Raycasters
 
 solid-three provides custom raycaster implementations that handle pointer tracking internally. All raycasters extend THREE.Raycaster and implement the `EventRaycaster` interface.
 
+> **When to Use Custom Raycasters**: Use built-in raycasters for common patterns, create custom ones for specialized interaction models.
+
+> **Performance**: Raycasting can be expensive with complex geometry. Use raycaster optimization techniques and `raycastable={false}` when appropriate.
+
 ## EventRaycaster Interface
 
-```typescript
-interface EventRaycaster extends THREE.Raycaster {
-  update(event: PointerEvent | MouseEvent | WheelEvent, context: Context): void
-}
-```
+| Method/Property | Type | Description |
+|-----------------|------|-------------|
+| **update** | `(event: Event, context: Context) => void` | Called automatically before intersection testing |
+| **params** | `RaycasterParameters` | THREE.js raycaster configuration |
+| **layers** | `Layers` | Layer mask for filtering objects |
+| **near/far** | `number` | Ray distance limits |
 
-The `update()` method is automatically called before intersection testing for:
-- Mouse events: `click`, `mousedown`, `mouseup`, `mousemove`, `contextmenu`, `dblclick`
-- Pointer events: `pointerdown`, `pointerup`, `pointermove`
-- Wheel events: `wheel`
+## Supported Events
+
+- **Mouse events**: `click`, `mousedown`, `mouseup`, `mousemove`, `contextmenu`, `dblclick`
+- **Pointer events**: `pointerdown`, `pointerup`, `pointermove`  
+- **Wheel events**: `wheel`
 
 ## Built-in Raycasters
 

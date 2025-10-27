@@ -4,96 +4,404 @@ title: Canvas
 
 # Canvas
 
-The `Canvas` component initializes the `three.js` rendering context and acts as the root for your 3D scene. All `<T/>` and `<Entity/>` components must be children of this Canvas.
+The `Canvas` component initializes the three.js rendering context and acts as the root for your 3D scene.
 
-## Props
+> **Important**: All `<T/>` and `<Entity/>` components must be children of the Canvas component. The Canvas sets up the WebGL context, scene, and render loop.
 
-### defaultCamera
-Configures the camera used in the scene. Can be partial props for a camera or an existing Camera instance.
+## Basic Usage
 
-### fallback
-Element to render while the main content is loading asynchronously.
+```tsx tab title="Minimal Setup"
+import { Canvas } from "solid-three";
 
-### gl
-Defines options for the WebGLRenderer, a function returning a customized renderer, or an existing renderer instance.
+function App() {
+  return (
+    <div style={{ width: "100vw", height: "100vh" }}>
+      <Canvas>
+        {/* Your 3D scene goes here */}
+      </Canvas>
+    </div>
+  );
+}
+```
 
-### scene
-Provides custom settings for the Scene instance or an existing Scene.
+```tsx tab title="With Scene Content"
+function Scene() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      
+      <T.Mesh>
+        <T.BoxGeometry />
+        <T.MeshStandardMaterial color="orange" />
+      </T.Mesh>
+    </Canvas>
+  );
+}
+```
 
-### defaultRaycaster
-Configures the Raycaster for mouse and pointer events.
+## Props Reference
 
-### shadows
-Enables and configures shadows in the scene with various shadow mapping techniques.
-- `boolean`: Simple enable/disable
-- `"basic"`: Basic shadow mapping
+### Camera Configuration
+
+**defaultCamera**: Configures the camera used in the scene. Can be partial props for a camera or an existing Camera instance.
+
+```tsx tab title="Perspective Camera"
+<Canvas
+  defaultCamera={{
+    position: [0, 0, 5],
+    fov: 75,
+    near: 0.1,
+    far: 1000
+  }}
+>
+  {/* Scene content */}
+</Canvas>
+```
+
+```tsx tab title="Orthographic Camera"
+<Canvas
+  orthographic
+  defaultCamera={{
+    position: [0, 0, 5],
+    zoom: 100
+  }}
+>
+  {/* Scene content */}
+</Canvas>
+```
+
+```tsx tab title="Custom Camera Instance"
+const customCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+customCamera.position.set(10, 10, 10);
+
+<Canvas defaultCamera={customCamera}>
+  {/* Scene content */}
+</Canvas>
+```
+
+### Rendering Options
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `gl` | `WebGLRenderer` options | `{}` | Renderer configuration |
+| `linear` | `boolean` | `false` | Linear texture filtering |
+| `flat` | `boolean` | `false` | Flat texture filtering |
+| `shadows` | Shadow type | `false` | Enable shadow mapping |
+
+<details>
+<summary>Shadow Types</summary>
+
+- `false`: No shadows
+- `true` or `"basic"`: Basic shadow mapping  
 - `"percentage"`: PCF shadow mapping
 - `"soft"`: PCF soft shadow mapping
 - `"variance"`: Variance shadow mapping
 
-### orthographic
-Toggles between Orthographic and Perspective camera for the default camera.
+</details>
 
-### linear
-Toggles linear interpolation for texture filtering.
+### Render Loop Control
 
-### flat
-Toggles flat interpolation for texture filtering.
+**frameloop** controls when the scene renders:
 
-### frameloop
-Controls the rendering loop's operation mode:
-- `"always"`: Renders continuously on every frame
-- `"demand"`: Renders only when explicitly requested
-- `"never"`: Disables automatic rendering
+- **`"always"`** (default): Renders continuously at 60fps
+- **`"demand"`**: Only renders when explicitly requested
+- **`"never"`**: Disables automatic rendering completely
 
-### style
-Custom CSS styles for the canvas container.
+```tsx tab title="Always Render"
+<Canvas frameloop="always">
+  {/* Continuously rendering scene */}
+</Canvas>
+```
 
-### class
-CSS class names for the canvas container.
-
-### Event handlers
-All event handlers are supported on the Canvas component, allowing you to handle events that bubble through the entire scene (e.g., `onClick`, `onPointerMove`, `onClickMissed`, etc.)
-
-## TypeScript Interface
-
-```tsx
-interface CanvasProps {
-  defaultCamera?: Partial<PerspectiveCamera | OrthographicCamera> | Camera
-  fallback?: JSX.Element
-  gl?: Partial<WebGLRenderer> | ((canvas: HTMLCanvasElement) => WebGLRenderer) | WebGLRenderer
-  scene?: Partial<Scene> | Scene
-  defaultRaycaster?: Partial<Raycaster> | Raycaster
-  shadows?: boolean | "basic" | "percentage" | "soft" | "variance" | WebGLRenderer["shadowMap"]
-  orthographic?: boolean
-  linear?: boolean
-  flat?: boolean
-  frameloop?: "never" | "demand" | "always"
-  style?: JSX.CSSProperties
-  class?: string
-  // Plus all event handlers
+```tsx tab title="On-Demand Rendering"
+function OnDemandScene() {
+  const three = useThree();
+  
+  return (
+    <Canvas frameloop="demand">
+      <T.Mesh onClick={() => three.requestRender()}>
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+    </Canvas>
+  );
 }
 ```
 
-## Example with all props
+```tsx tab title="Manual Control"
+function ManualScene() {
+  const three = useThree();
+  
+  useFrame(() => {
+    // Custom render logic
+    three.render();
+  });
+  
+  return (
+    <Canvas frameloop="never">
+      {/* Scene content */}
+    </Canvas>
+  );
+}
+```
 
-```tsx
+### Scene and Environment
+
+```tsx tab title="Scene Configuration"
 <Canvas
-  camera={{ position: [0, 0, 5], fov: 75 }}
-  fallback={<div>Loading...</div>}
-  gl={{ antialias: true, alpha: true }}
-  scene={{ fog: new Fog(0xffffff, 1, 100) }}
-  raycaster={{ params: { Line: { threshold: 0.1 } } }}
-  shadows="soft"
-  orthographic={false}
-  linear={false}
-  flat={false}
-  frameloop="always"
-  style={{ background: "black" }}
-  onClick={e => console.log("Canvas clicked")}
-  onClickMissed={e => console.log("Clicked empty space")}
-  onPointerMove={e => console.log("Pointer moved on canvas")}
+  scene={{
+    background: new THREE.Color(0x87CEEB),
+    fog: new THREE.Fog(0xffffff, 1, 100)
+  }}
 >
-  {/* Your 3D scene */}
+  {/* Scene content */}
 </Canvas>
 ```
+
+```tsx tab title="Custom Scene Instance"
+const customScene = new THREE.Scene();
+customScene.background = new THREE.CubeTextureLoader().load([
+  'px.jpg', 'nx.jpg', 'py.jpg', 'ny.jpg', 'pz.jpg', 'nz.jpg'
+]);
+
+<Canvas scene={customScene}>
+  {/* Scene content */}
+</Canvas>
+```
+
+### Event Handling
+
+**Global Events**: Canvas supports all pointer and mouse events, perfect for handling interactions that don't hit any objects.
+
+```tsx {4-6}
+<Canvas
+  onClick={(e) => console.log("Canvas clicked")}
+  onClickMissed={(e) => console.log("Clicked empty space")}
+  onPointerMove={(e) => console.log("Pointer position:", e.pointer)}
+>
+  <T.Mesh onClick={(e) => e.stopPropagation()}>
+    <T.BoxGeometry />
+    <T.MeshBasicMaterial />
+  </T.Mesh>
+</Canvas>
+```
+
+### Loading States
+
+```tsx tab title="Simple Fallback"
+<Canvas fallback={<div>Loading 3D scene...</div>}>
+  <Suspense>
+    <AsyncScene />
+  </Suspense>
+</Canvas>
+```
+
+```tsx tab title="Custom Loading UI"
+function LoadingSpinner() {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)'
+    }}>
+      <div>🌀 Loading...</div>
+    </div>
+  );
+}
+
+<Canvas fallback={<LoadingSpinner />}>
+  <Suspense>
+    <ModelViewer />
+  </Suspense>
+</Canvas>
+```
+
+## Advanced Configuration
+
+### Custom WebGL Renderer
+
+```tsx tab title="Renderer Options"
+<Canvas
+  gl={{
+    antialias: true,
+    alpha: true,
+    powerPreference: "high-performance",
+    stencil: false,
+    depth: true
+  }}
+>
+  {/* Scene content */}
+</Canvas>
+```
+
+```tsx tab title="Custom Renderer Factory"
+const createRenderer = (canvas: HTMLCanvasElement) => {
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    powerPreference: "high-performance"
+  });
+  
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  
+  return renderer;
+};
+
+<Canvas gl={createRenderer}>
+  {/* Scene content */}
+</Canvas>
+```
+
+```tsx tab title="Existing Renderer Instance"
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+<Canvas gl={renderer}>
+  {/* Scene content */}
+</Canvas>
+```
+
+### Raycaster Configuration
+
+**Custom Raycaster**: Configure how pointer events are detected in your scene.
+
+```tsx
+import { CenterRaycaster } from "solid-three";
+
+const customRaycaster = new THREE.Raycaster();
+customRaycaster.params.Line.threshold = 0.1;
+customRaycaster.params.Points.threshold = 0.1;
+
+<Canvas 
+  defaultRaycaster={customRaycaster}
+  // Or use a built-in raycaster
+  // defaultRaycaster={new CenterRaycaster()}
+>
+  {/* Scene content */}
+</Canvas>
+```
+
+## Complete Example
+
+```tsx tab title="Production Setup"
+function ProductionCanvas() {
+  return (
+    <Canvas
+      // Camera setup
+      defaultCamera={{
+        position: [0, 5, 10],
+        fov: 45
+      }}
+      
+      // Renderer optimization
+      gl={{
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance"
+      }}
+      
+      // Enable shadows
+      shadows="soft"
+      
+      // Scene setup
+      scene={{
+        background: new THREE.Color(0x87CEEB)
+      }}
+      
+      // Performance
+      frameloop="demand"
+      
+      // Styling
+      style={{
+        width: "100%",
+        height: "100vh",
+        display: "block"
+      }}
+      
+      // Global event handling
+      onPointerMissed={() => console.log("Clicked background")}
+    >
+      <ProductionScene />
+    </Canvas>
+  );
+}
+```
+
+```tsx tab title="Development Setup"
+function DevelopmentCanvas() {
+  return (
+    <Canvas
+      // Simpler camera
+      defaultCamera={{ position: [0, 0, 5] }}
+      
+      // Basic renderer
+      gl={{ antialias: true }}
+      
+      // Always render for development
+      frameloop="always"
+      
+      // Loading fallback
+      fallback={<div>Loading scene...</div>}
+    >
+      <DevelopmentScene />
+    </Canvas>
+  );
+}
+```
+
+## TypeScript Interface
+
+<details>
+<summary>Full CanvasProps Interface</summary>
+
+```tsx
+interface CanvasProps {
+  // Camera
+  defaultCamera?: Partial<PerspectiveCamera | OrthographicCamera> | Camera
+  orthographic?: boolean
+  
+  // Renderer
+  gl?: Partial<WebGLRenderer> | ((canvas: HTMLCanvasElement) => WebGLRenderer) | WebGLRenderer
+  linear?: boolean
+  flat?: boolean
+  
+  // Scene
+  scene?: Partial<Scene> | Scene
+  shadows?: boolean | "basic" | "percentage" | "soft" | "variance" | WebGLRenderer["shadowMap"]
+  
+  // Rendering
+  frameloop?: "never" | "demand" | "always"
+  
+  // Events
+  defaultRaycaster?: Partial<Raycaster> | Raycaster
+  // Plus all pointer and mouse event handlers
+  
+  // UI
+  fallback?: JSX.Element
+  style?: JSX.CSSProperties
+  class?: string
+  children?: JSX.Element
+}
+```
+
+</details>
+
+## Performance Optimization
+
+> **Battery Life**: Use `frameloop="demand"` for static scenes to dramatically reduce power consumption.
+
+> **Mobile Performance**: Disable antialiasing on mobile devices for 60fps performance: `antialias: false`.
+
+> **Power Preference**: For battery-conscious applications, use `powerPreference: "low-power"` to prioritize efficiency over raw performance.
+
+### Performance Checklist
+
+- **Static scenes**: `frameloop="demand"` + `requestRender()` when needed
+- **Mobile devices**: `antialias: false` + lower resolution if needed
+- **Battery apps**: `powerPreference: "low-power"`
+- **High-performance**: `powerPreference: "high-performance"` + dedicated GPU
+- **Memory constrained**: Limit shadow map sizes and texture resolutions

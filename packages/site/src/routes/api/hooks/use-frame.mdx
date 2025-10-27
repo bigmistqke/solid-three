@@ -6,15 +6,20 @@ title: useFrame
 
 Registers a callback that will be called before every frame is rendered, useful for animations and updates.
 
-## Parameters
+> **60fps Animations**: useFrame runs at 60fps by default, perfect for smooth animations and real-time updates.
 
-- **callback** - Function called each frame with:
-  - **context** - The three.js context object (same as `useThree()`)
-  - **delta** - Time elapsed since last frame in seconds
-  - **frame** - Optional XRFrame for WebXR sessions
-- **options** - Optional configuration object:
-  - **priority** - Execution priority (lower numbers run first, default: 0)
-  - **stage** - Whether to run before or after rendering (default: "before")
+> **Performance**: Use refs instead of signals for high-frequency updates to avoid unnecessary reactivity overhead.
+
+## Parameters Reference
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| **callback** | `Function` | Called each frame with context, delta, and optional XR frame |
+| **context** | `Context` | Three.js context (same as `useThree()`) |
+| **delta** | `number` | Time elapsed since last frame in seconds |
+| **frame** | `XRFrame?` | Optional XRFrame for WebXR sessions |
+| **priority** | `number` | Execution order (lower = earlier, default: 0) |
+| **stage** | `"before" \| "after"` | Run before or after rendering (default: "before") |
 
 ## TypeScript Interface
 
@@ -28,9 +33,10 @@ useFrame(
 )
 ```
 
-## Basic Usage
+## Animation Patterns
 
-```tsx
+```tsx tab title="Basic Animation"
+// Simple rotation using refs for performance
 function RotatingCube() {
   let mesh: THREE.Mesh = null!
 
@@ -48,48 +54,54 @@ function RotatingCube() {
 }
 ```
 
-## Priority Control
+```tsx tab title="Priority System"
+// Control execution order with priority
+function PriorityExample() {
+  let mesh: THREE.Mesh = null!
+  
+  // Physics update (runs first)
+  useFrame(
+    (context, delta) => {
+      mesh.position.x = Math.sin(context.clock.elapsedTime) * 2
+    },
+    { priority: -1 }
+  )
 
-Lower priority numbers run first:
-
-```tsx
-// Runs first (priority: -1)
-useFrame(
-  (context, delta) => {
-    mesh.position.x = Math.sin(context.clock.elapsedTime) * 2
-  },
-  { priority: -1 }
-)
-
-// Runs after (priority: 10)
-useFrame(
-  (context, delta) => {
-    console.log("Position updated:", mesh.position.x)
-  },
-  { priority: 10 }
-)
+  // Visual feedback (runs after physics)
+  useFrame(
+    (context, delta) => {
+      console.log("Position:", mesh.position.x)
+    },
+    { priority: 10 }
+  )
+  
+  return <T.Mesh ref={mesh}>...</T.Mesh>
+}
 ```
 
-## Before/After Render
+```tsx tab title="Render Stages"
+// Control when your callback runs relative to rendering
+function StageExample() {
+  let mesh: THREE.Mesh = null!
+  
+  // Update animations before render (default)
+  useFrame(
+    (context, delta) => {
+      mesh.rotation.y += delta
+    },
+    { stage: "before" }
+  )
 
-Control whether your callback runs before or after the scene renders:
-
-```tsx
-// Update animations before render (default)
-useFrame(
-  (context, delta) => {
-    mesh.rotation.y += delta
-  },
-  { stage: "before" }
-)
-
-// Run cleanup or analytics after render
-useFrame(
-  (context, delta) => {
-    console.info("Frame rendered in", delta * 1000, "ms")
-  },
-  { stage: "after" }
-)
+  // Analytics or cleanup after render
+  useFrame(
+    (context, delta) => {
+      console.info("Frame time:", delta * 1000, "ms")
+    },
+    { stage: "after" }
+  )
+  
+  return <T.Mesh ref={mesh}>...</T.Mesh>
+}
 ```
 
 ## Advanced Example

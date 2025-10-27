@@ -6,30 +6,46 @@ title: Entity
 
 The `Entity` component provides an alternative way to create three.js objects without needing to pre-create a T namespace. This is particularly useful in libraries or when working with dynamic object types.
 
-## Basic Usage
+> **When to Use**: Use constructors for simple cases, instances for complex setups or shared resources.
 
-### With Constructor
+> **Memory Management**: When using instances, always wrap them with `autodispose()` to prevent memory leaks.
 
-You can pass a three.js constructor to create new instances:
+## Choosing Between Constructor and Instance
 
-```tsx
+```tsx tab title="Constructor Pattern"
+// Creates new instances each time
 <Entity from={Mesh}>
   <Entity from={BoxGeometry} args={[1, 1, 1]} />
   <Entity from={MeshBasicMaterial} args={["orange"]} />
 </Entity>
 ```
 
-### With Instance
-
-You can pass an existing three.js instance:
-
-```tsx
-const mesh = new Mesh(
+```tsx tab title="Instance Pattern"
+// Uses existing instances (requires autodispose)
+const mesh = autodispose(new Mesh(
   new BoxGeometry(1, 1, 1), 
   new MeshBasicMaterial({ color: 'orange' })
-);
+));
 
 <Entity from={mesh} position={[0, 0, 0]} />
+```
+
+```tsx tab title="Dynamic Objects"
+// Perfect for dynamic types
+function DynamicEntity({ type, ...props }) {
+  const geometryMap = {
+    box: BoxGeometry,
+    sphere: SphereGeometry,
+    cylinder: CylinderGeometry
+  };
+  
+  return (
+    <Entity from={Mesh}>
+      <Entity from={geometryMap[type]} args={[1, 1, 1]} />
+      <Entity from={MeshBasicMaterial} args={[props.color]} />
+    </Entity>
+  );
+}
 ```
 
 ## Props
