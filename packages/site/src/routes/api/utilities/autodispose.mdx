@@ -1,0 +1,278 @@
+---
+title: autodispose
+---
+
+# autodispose
+
+The `autodispose` utility ensures that three.js objects are properly disposed when components unmount, preventing memory leaks.
+
+## When to Use
+
+Use `autodispose` when:
+- Creating THREE.js objects manually with `new`
+- Passing instances to `<Entity from={instance} />`
+- Working with conditional rendering
+- Sharing resources between components
+
+## Basic Usage
+
+```tsx
+import { autodispose, Entity } from "solid-three"
+import { BoxGeometry, MeshBasicMaterial } from "three"
+
+function ManualObjects() {
+  // These will be disposed when the component unmounts
+  const geometry = autodispose(new BoxGeometry())
+  const material = autodispose(new MeshBasicMaterial({ color: 'orange' }))
+  
+  return (
+    <Entity from={new THREE.Mesh(geometry, material)} />
+  )
+}
+```
+
+## Conditional Rendering
+
+### ❌ Wrong - Memory Leak
+
+Without `autodispose`, resources remain in memory after unmounting:
+
+```tsx
+function Wrong(props: { shape: "box" | "sphere" }) {
+  const box = new BoxGeometry()
+  const sphere = new SphereGeometry()
+  
+  return (
+    <Show when={props.shape === "box"} fallback={<Entity from={sphere} />}>
+      <Entity from={box} />
+    </Show>
+  )
+  // ❌ Memory leak: geometries are never disposed
+}
+```
+
+### ✅ Correct - Automatic Disposal
+
+```tsx
+function Correct(props: { shape: "box" | "sphere" }) {
+  const box = autodispose(new BoxGeometry())
+  const sphere = autodispose(new SphereGeometry())
+  
+  return (
+    <Show when={props.shape === "box"} fallback={<Entity from={sphere} />}>
+      <Entity from={box} />
+    </Show>
+  )
+  // ✅ Resources are automatically disposed when component cleans up
+}
+```
+
+## Shared Resources
+
+```tsx
+function SharedGeometry() {
+  // Single geometry shared across multiple meshes
+  const geometry = autodispose(new THREE.SphereGeometry(0.3, 16, 16))
+  const material = autodispose(new THREE.MeshStandardMaterial())
+  
+  return (
+    <Index each={Array.from({ length: 10 })}>
+      {(_, i) => (
+        <T.Mesh position={[(i - 5) * 0.8, 0, 0]}>
+          <Entity from={geometry} />
+          <Entity from={material} color={`hsl(${i * 36}, 70%, 50%)`} />
+        </T.Mesh>
+      )}
+    </Index>
+  )
+  // Geometry and material are disposed when this component unmounts
+}
+```
+
+## Complex Object Hierarchies
+
+```tsx
+function ComplexObject() {
+  // Create a complex object hierarchy
+  const group = autodispose(new THREE.Group())
+  const mesh1 = autodispose(new THREE.Mesh(
+    new THREE.BoxGeometry(),
+    new THREE.MeshBasicMaterial({ color: 'red' })
+  ))
+  const mesh2 = autodispose(new THREE.Mesh(
+    new THREE.SphereGeometry(),
+    new THREE.MeshBasicMaterial({ color: 'blue' })
+  ))
+  
+  // Set up hierarchy
+  mesh1.position.x = -1
+  mesh2.position.x = 1
+  group.add(mesh1, mesh2)
+  
+  return <Entity from={group} />
+  // All objects in the hierarchy are disposed together
+}
+```
+
+## Working with Loaders
+
+```tsx
+function LoadedModel() {
+  const [modelUrl, setModelUrl] = createSignal("model1.glb")
+  
+  // Clone and autodispose loaded models
+  const model = createMemo(() => {
+    const gltf = useLoader(GLTFLoader, modelUrl())
+    // Clone the scene to avoid modifying the cached original
+    return autodispose(gltf().scene.clone())
+  })
+  
+  return (
+    <>
+      <Entity from={model()} scale={0.1} />
+      
+      <button onClick={() => setModelUrl("model2.glb")}>
+        Switch Model
+      </button>
+    </>
+  )
+  // Previous model instances are disposed when modelUrl changes
+}
+```
+
+## Custom Disposal Logic
+
+```tsx
+function CustomDisposal() {
+  // Create object with custom cleanup
+  const customObject = autodispose(new THREE.Object3D(), {
+    dispose() {
+      console.log("Custom cleanup logic")
+      // Dispose children, remove event listeners, etc.
+      this.children.forEach(child => {
+        if (child.dispose) child.dispose()
+      })
+      this.clear()
+    }
+  })
+  
+  return <Entity from={customObject} />
+}
+```
+
+## Performance Considerations
+
+### Expensive Resources
+
+```tsx
+function ExpensiveResources() {
+  // Autodispose expensive-to-create resources
+  const complexGeometry = autodispose(
+    new THREE.ParametricGeometry(
+      (u, v, target) => {
+        // Complex mathematical function
+        const x = Math.cos(u * Math.PI * 2) * Math.sin(v * Math.PI)
+        const y = Math.sin(u * Math.PI * 2) * Math.sin(v * Math.PI)
+        const z = Math.cos(v * Math.PI)
+        target.set(x, y, z)
+      },
+      100, // High resolution
+      100
+    )
+  )
+  
+  return (
+    <T.Mesh>
+      <Entity from={complexGeometry} />
+      <T.MeshStandardMaterial wireframe />
+    </T.Mesh>
+  )
+}
+```
+
+### Texture Management
+
+```tsx
+function TextureManagement() {
+  const [textureData, setTextureData] = createSignal(null)
+  
+  // Autodispose dynamically created textures
+  const texture = createMemo(() => {
+    const data = textureData()
+    if (!data) return null
+    
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 256
+    const ctx = canvas.getContext('2d')
+    // Draw texture data to canvas
+    // ...
+    
+    const texture = autodispose(new THREE.CanvasTexture(canvas))
+    texture.needsUpdate = true
+    return texture
+  })
+  
+  return (
+    <T.Mesh>
+      <T.PlaneGeometry />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+  // Previous textures are disposed when textureData changes
+}
+```
+
+## Integration with Solid's onCleanup
+
+```tsx
+function ManualCleanup() {
+  const geometry = new THREE.BoxGeometry()
+  const material = new THREE.MeshBasicMaterial()
+  
+  // Manual cleanup without autodispose
+  onCleanup(() => {
+    geometry.dispose()
+    material.dispose()
+  })
+  
+  return (
+    <Entity from={new THREE.Mesh(geometry, material)} />
+  )
+}
+
+// vs. using autodispose (recommended)
+function AutoCleanup() {
+  const geometry = autodispose(new THREE.BoxGeometry())
+  const material = autodispose(new THREE.MeshBasicMaterial())
+  
+  return (
+    <Entity from={new THREE.Mesh(geometry, material)} />
+  )
+}
+```
+
+## Best Practices
+
+1. **Always use autodispose** for manually created THREE.js objects
+2. **Use with Entity components** when passing instances
+3. **Apply to shared resources** that might be used by multiple components
+4. **Consider memory usage** for complex geometries and high-resolution textures
+5. **Test with dev tools** to verify resources are being disposed correctly
+
+```tsx
+// Good pattern
+function GoodExample() {
+  const resources = {
+    geometry: autodispose(new THREE.BoxGeometry()),
+    material: autodispose(new THREE.MeshBasicMaterial()),
+    texture: autodispose(new THREE.TextureLoader().load('texture.jpg'))
+  }
+  
+  return (
+    <T.Mesh>
+      <Entity from={resources.geometry} />
+      <Entity from={resources.material} map={resources.texture} />
+    </T.Mesh>
+  )
+}
+```

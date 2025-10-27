@@ -1,0 +1,136 @@
+---
+title: Metadata
+---
+
+# Metadata Utilities
+
+These utilities help manage metadata associated with THREE.js objects in solid-three.
+
+## Available Functions
+
+- **getMeta(object)**: Get metadata associated with a THREE.js object
+- **hasMeta(object)**: Check if an object has metadata
+- **meta**: WeakMap storing object metadata
+- **$S3C**: Symbol used internally for component metadata
+
+## Basic Usage
+
+```tsx
+import { getMeta, hasMeta } from "solid-three"
+
+function InspectObject() {
+  let meshRef
+  
+  const inspectMesh = () => {
+    const mesh = meshRef
+    
+    // Check if an object has solid-three metadata
+    if (hasMeta(mesh)) {
+      const metadata = getMeta(mesh)
+      console.log("Object metadata:", metadata)
+      console.log("Component type:", metadata?.[$S3C]?.type)
+    } else {
+      console.log("No metadata found")
+    }
+  }
+  
+  return (
+    <>
+      <T.Mesh ref={meshRef}>
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+      
+      <button onClick={inspectMesh}>
+        Inspect Mesh
+      </button>
+    </>
+  )
+}
+```
+
+## Advanced Usage
+
+### Custom Metadata
+
+```tsx
+function CustomMetadata() {
+  let objectRef
+  
+  onMount(() => {
+    // Add custom metadata to an object
+    const object = objectRef
+    if (object) {
+      const existingMeta = getMeta(object) || {}
+      meta.set(object, {
+        ...existingMeta,
+        customId: "my-object-123",
+        createdAt: Date.now(),
+        userData: { type: "interactive" }
+      })
+    }
+  })
+  
+  return (
+    <T.Group ref={objectRef}>
+      {/* children */}
+    </T.Group>
+  )
+}
+```
+
+### Debug Information
+
+```tsx
+function DebugScene() {
+  const inspectAll = () => {
+    const scene = document.querySelector('canvas')
+    // Traverse all objects and inspect metadata
+    scene?.traverse?.((object) => {
+      if (hasMeta(object)) {
+        const metadata = getMeta(object)
+        console.log(`Object ${object.name || object.id}:`, metadata)
+      }
+    })
+  }
+  
+  return (
+    <>
+      <T.Mesh name="debug-cube">
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+      
+      <button onClick={inspectAll}>
+        Debug All Objects
+      </button>
+    </>
+  )
+}
+```
+
+## Internal Usage
+
+These utilities are primarily used internally by solid-three for:
+- Tracking component relationships
+- Managing object lifecycles
+- Debugging and development tools
+- Integration with SolidJS reactivity
+
+```tsx
+// Internal usage example (for library developers)
+function createCustomComponent() {
+  const object = new THREE.Object3D()
+  
+  // solid-three internally stores metadata like this:
+  meta.set(object, {
+    [$S3C]: {
+      type: 'CustomComponent',
+      props: {},
+      owner: getOwner() // SolidJS owner context
+    }
+  })
+  
+  return object
+}
+```

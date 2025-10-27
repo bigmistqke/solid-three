@@ -1,0 +1,280 @@
+---
+title: Event Propagation
+---
+
+# Event Propagation
+
+solid-three implements a dual propagation system that combines 3D raycasting with DOM-like event bubbling through the scene graph.
+
+## Dual Propagation System
+
+### 1. Raycast Propagation (3D Space)
+
+When you interact with the scene, solid-three casts a ray from the camera through your pointer position into the 3D scene:
+
+- Events are processed for each intersected object in order from **closest to farthest** from the camera
+- If an object calls `stopPropagation()`, objects further along the ray won't receive the event
+- This respects the visual layering of your 3D scene
+
+### 2. Tree Propagation (Scene Graph)
+
+After an object handles an event, it bubbles up through the scene graph hierarchy:
+
+- Events bubble from **child → parent** through the object hierarchy
+- If `stopPropagation()` is called, parent objects won't receive the event
+- If no object calls `stopPropagation()`, the event finally bubbles to the `<Canvas/>` component
+
+## Visual Example
+
+```tsx
+const EventPropagation = () => {
+  return (
+    <Canvas onClick={() => console.log("4. Canvas clicked (final)")}>
+      <T.Group onClick={() => console.log("3. Group clicked (bubbled)")}>
+        <T.Mesh
+          position={[0, 0, 0]}
+          onClick={() => console.log("2. Back mesh clicked")}
+        >
+          <T.BoxGeometry args={[1, 1, 1]} />
+          <T.MeshBasicMaterial color="blue" />
+        </T.Mesh>
+
+        <T.Mesh
+          position={[0, 0, 2]} // In front
+          onClick={e => {
+            console.log("1. Front mesh clicked (first hit)")
+            // Uncomment to stop ALL propagation
+            // e.stopPropagation()
+          }}
+        >
+          <T.BoxGeometry args={[1, 1, 1]} />
+          <T.MeshBasicMaterial color="red" />
+        </T.Mesh>
+      </T.Group>
+    </Canvas>
+  )
+}
+```
+
+**Click output (without stopPropagation):**
+1. Front mesh clicked (closest to camera)
+2. Back mesh clicked (next in ray)
+3. Group clicked (parent of front mesh)
+4. Canvas clicked (root)
+
+## Controlling Propagation
+
+### Stop All Propagation
+
+```tsx
+<T.Mesh
+  onClick={(e) => {
+    console.log("Only this handler runs")
+    e.stopPropagation() // Stops both raycast and tree propagation
+  }}
+>
+  <T.BoxGeometry />
+  <T.MeshBasicMaterial />
+</T.Mesh>
+```
+
+### Selective Propagation
+
+```tsx
+function SelectiveExample() {
+  return (
+    <T.Group onClick={() => console.log("Group handler")}>
+      <T.Mesh
+        position={[0, 0, 0]}
+        onClick={(e) => {
+          console.log("Mesh 1")
+          // Let it bubble to parent but not to siblings
+        }}
+      >
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial color="red" />
+      </T.Mesh>
+      
+      <T.Mesh
+        position={[0, 0, -1]}
+        onClick={(e) => {
+          console.log("Mesh 2")
+          e.stopPropagation() // Stop here
+        }}
+      >
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial color="blue" />
+      </T.Mesh>
+    </T.Group>
+  )
+}
+```
+
+## Stoppable vs Non-Stoppable Events
+
+### Non-stoppable Events
+
+These events **always** fire and cannot be stopped:
+
+- `onMouseEnter`, `onPointerEnter` - Enter events
+- `onMouseLeave`, `onPointerLeave` - Leave events
+- `onClickMissed`, `onDoubleClickMissed`, `onContextMenuMissed` - Missed events
+
+```tsx
+<T.Group
+  onPointerEnter={() => console.log("Group entered")}
+>
+  <T.Mesh
+    onPointerEnter={(e) => {
+      console.log("Mesh entered")
+      e.stopPropagation() // ❌ Has no effect on enter events
+    }}
+  >
+    <T.BoxGeometry />
+    <T.MeshBasicMaterial />
+  </T.Mesh>
+</T.Group>
+```
+
+### Stoppable Events
+
+All other events can be stopped:
+
+```tsx
+<T.Group onClick={() => console.log("Group clicked")}>
+  <T.Mesh
+    onClick={(e) => {
+      console.log("Mesh clicked")
+      e.stopPropagation() // ✅ Prevents group handler
+    }}
+  >
+    <T.BoxGeometry />
+    <T.MeshBasicMaterial />
+  </T.Mesh>
+</T.Group>
+```
+
+## Complex Scenarios
+
+### Nested Groups
+
+```tsx
+function NestedPropagation() {
+  return (
+    <T.Group name="outer" onClick={() => console.log("Outer group")}>
+      <T.Group name="middle" onClick={() => console.log("Middle group")}>
+        <T.Group name="inner" onClick={() => console.log("Inner group")}>
+          <T.Mesh onClick={(e) => {
+            console.log("Mesh clicked")
+            // Events bubble: Mesh → Inner → Middle → Outer → Canvas
+          }}>
+            <T.BoxGeometry />
+            <T.MeshBasicMaterial />
+          </T.Mesh>
+        </T.Group>
+      </T.Group>
+    </T.Group>
+  )
+}
+```
+
+### Multiple Overlapping Objects
+
+```tsx
+function OverlappingObjects() {
+  return (
+    <>
+      {/* Back layer */}
+      <T.Mesh
+        position={[0, 0, -2]}
+        scale={[3, 3, 1]}
+        onClick={() => console.log("Background clicked")}
+      >
+        <T.PlaneGeometry />
+        <T.MeshBasicMaterial color="lightblue" />
+      </T.Mesh>
+      
+      {/* Middle layer */}
+      <T.Mesh
+        position={[0, 0, -1]}
+        scale={[2, 2, 1]}
+        onClick={(e) => {
+          console.log("Middle layer clicked")
+          e.stopPropagation() // Background won't receive event
+        }}
+      >
+        <T.PlaneGeometry />
+        <T.MeshBasicMaterial color="lightgreen" transparent opacity={0.8} />
+      </T.Mesh>
+      
+      {/* Front layer */}
+      <T.Mesh
+        position={[0, 0, 0]}
+        onClick={() => console.log("Front layer clicked")}
+      >
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial color="orange" />
+      </T.Mesh>
+    </>
+  )
+}
+```
+
+## Event Priority
+
+Understanding the order of event processing:
+
+1. **Ray Intersection**: Find all objects hit by the ray
+2. **Sort by Distance**: Order from nearest to farthest
+3. **Process Each Hit**:
+   - Fire event on the object
+   - If not stopped, bubble up through parents
+   - If stopped, skip remaining ray hits
+4. **Canvas Event**: If nothing stopped propagation
+
+## Practical Tips
+
+### 1. Use Groups for Event Delegation
+
+```tsx
+<T.Group onClick={(e) => {
+  // Handle clicks for all children
+  console.log("Clicked:", e.object.name)
+}}>
+  <T.Mesh name="box"><T.BoxGeometry /></T.Mesh>
+  <T.Mesh name="sphere"><T.SphereGeometry /></T.Mesh>
+  <T.Mesh name="cone"><T.ConeGeometry /></T.Mesh>
+</T.Group>
+```
+
+### 2. Stop Propagation for Modal-like Behavior
+
+```tsx
+function Modal({ open, onClose, children }) {
+  if (!open) return null
+  
+  return (
+    <T.Group
+      onClick={(e) => {
+        e.stopPropagation() // Prevent clicks from going through
+      }}
+      onClickMissed={onClose} // Close when clicking outside
+    >
+      {children}
+    </T.Group>
+  )
+}
+```
+
+### 3. Understand Raycast Order
+
+Objects are hit in visual order (front to back), not DOM order:
+
+```tsx
+// DOM order doesn't matter for raycasting
+<>
+  <T.Mesh position={[0, 0, 2]}>...</T.Mesh>  {/* Hit first */}
+  <T.Mesh position={[0, 0, 0]}>...</T.Mesh>  {/* Hit second */}
+  <T.Mesh position={[0, 0, -2]}>...</T.Mesh> {/* Hit third */}
+</>
+```

@@ -1,0 +1,83 @@
+---
+title: Basic Scene Example
+---
+
+# Basic Scene Example
+
+This example demonstrates how to create a simple 3D scene with solid-three.
+
+## Complete Example
+
+```tsx
+import { createSignal } from "solid-js";
+import { Canvas, createT } from "solid-three";
+import * as THREE from "three";
+
+const T = createT(THREE);
+
+function Box(props) {
+  const [hovered, setHovered] = createSignal(false);
+  const [clicked, setClicked] = createSignal(false);
+
+  return (
+    <T.Mesh
+      {...props}
+      scale={clicked() ? 1.5 : 1}
+      onClick={() => setClicked(!clicked())}
+      onPointerOver={() => setHovered(true)}
+      onPointerOut={() => setHovered(false)}
+    >
+      <T.BoxGeometry args={[1, 1, 1]} />
+      <T.MeshStandardMaterial color={hovered() ? "hotpink" : "orange"} />
+    </T.Mesh>
+  );
+}
+
+export function BasicScene() {
+  return (
+    <div style={{ width: "100vw", height: "100vh" }}>
+      <Canvas>
+        {/* Lighting */}
+        <T.AmbientLight intensity={0.5} />
+        <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+        
+        {/* Objects */}
+        <Box position={[-1.2, 0, 0]} />
+        <Box position={[1.2, 0, 0]} />
+      </Canvas>
+    </div>
+  );
+}
+```
+
+## Key Concepts
+
+### 1. Canvas Setup
+The `Canvas` component creates the WebGL context and manages the render loop. Always wrap your 3D content in a Canvas.
+
+### 2. Lighting
+Without lights, you won't see your objects:
+- `AmbientLight` provides overall illumination
+- `DirectionalLight` creates directional shadows and highlights
+
+### 3. Interactive Components
+The `Box` component demonstrates:
+- Reactive state with `createSignal`
+- Event handlers (`onClick`, `onPointerOver`, `onPointerOut`)
+- Conditional styling based on state
+
+### 4. Props Spreading
+Notice how we use `{...props}` to pass position and other props to the Mesh component.
+
+## Try It Yourself
+
+1. Add more boxes at different positions
+2. Change the colors based on different states
+3. Add rotation animation using `useFrame`
+4. Experiment with different geometries (SphereGeometry, ConeGeometry, etc.)
+
+## Next Steps
+
+- Learn about [Animation](/examples/animation) with useFrame
+- Explore [Event Handling](/examples/events) patterns
+- See how to [Load Assets](/examples/loading) like textures and models

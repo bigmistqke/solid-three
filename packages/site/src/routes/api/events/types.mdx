@@ -1,0 +1,238 @@
+---
+title: Event Types
+---
+
+# Event Types
+
+solid-three provides a comprehensive set of event handlers that mirror DOM events but work with 3D objects in your scene.
+
+## Supported Events
+
+### Click Events
+
+- **onClick**: Fired when clicking on an object
+- **onClickMissed**: Fired when a click doesn't hit any objects with onClick handlers
+- **onDoubleClick**: Fired when double-clicking on an object
+- **onDoubleClickMissed**: Fired when a double-click doesn't hit any objects with onDoubleClick handlers
+- **onContextMenu**: Fired when right-clicking on an object
+- **onContextMenuMissed**: Fired when a right-click doesn't hit any objects with onContextMenu handlers
+
+### Mouse Events
+
+- **onMouseDown**: Fired when mouse button is pressed
+- **onMouseUp**: Fired when mouse button is released
+- **onMouseMove**: Fired when mouse moves over object
+- **onMouseEnter**: Fired when mouse enters object
+- **onMouseLeave**: Fired when mouse leaves object
+
+### Pointer Events (Recommended)
+
+- **onPointerDown**: Fired when pointer is pressed
+- **onPointerUp**: Fired when pointer is released
+- **onPointerMove**: Fired when pointer moves
+- **onPointerEnter**: Fired when pointer enters object
+- **onPointerLeave**: Fired when pointer leaves object
+- **onPointerOver**: Fired when pointer is over object (similar to enter but fires on every frame)
+- **onPointerOut**: Fired when pointer leaves object (similar to leave but fires on every frame)
+
+### Other Events
+
+- **onWheel**: Fired on mouse wheel events
+
+## Event Object
+
+All event handlers receive an enhanced event object with THREE.js specific properties:
+
+```tsx
+interface ThreeEvent<TEvent extends Event> {
+  // Original DOM event
+  nativeEvent: TEvent
+  
+  // THREE.js specific properties
+  camera: Camera              // The camera used for raycasting
+  ray: Ray                    // The ray cast from camera
+  point: Vector3              // 3D point where ray intersected
+  distance: number            // Distance from camera to intersection
+  object: Object3D            // The object that was hit
+  eventObject: Object3D       // Current object in propagation chain
+  face?: Face                 // The face that was hit (if applicable)
+  faceIndex?: number          // Index of the face
+  uv?: Vector2                // UV coordinates at intersection
+  uv2?: Vector2               // Second UV coordinates (if available)
+  instanceId?: number         // For instanced meshes
+  
+  // Event control
+  stopped?: boolean           // Whether propagation has been stopped
+  stopPropagation?: () => void // Stop event from bubbling
+}
+```
+
+## Basic Event Handling
+
+```tsx
+function InteractiveBox() {
+  const [hovered, setHovered] = createSignal(false)
+  const [active, setActive] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      scale={active() ? 1.5 : 1}
+      onClick={(e) => {
+        console.log("Clicked at:", e.point)
+        setActive(!active())
+      }}
+      onPointerOver={(e) => {
+        console.log("Hovering object:", e.object)
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial 
+        color={hovered() ? "hotpink" : "orange"} 
+      />
+    </T.Mesh>
+  )
+}
+```
+
+## Missed Events
+
+Missed events are useful for detecting clicks outside of specific objects:
+
+```tsx
+function ClickOutsideExample() {
+  const [selected, setSelected] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      onClick={() => setSelected(true)}
+      onClickMissed={() => setSelected(false)}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial 
+        color={selected() ? "hotpink" : "gray"} 
+        emissive={selected() ? "hotpink" : "black"}
+        emissiveIntensity={0.5}
+      />
+    </T.Mesh>
+  )
+}
+```
+
+## Mouse vs Pointer Events
+
+It's recommended to use pointer events as they support both mouse and touch input:
+
+```tsx
+// ❌ Mouse events only work with mouse
+<T.Mesh
+  onMouseDown={() => console.log("Mouse down")}
+  onMouseUp={() => console.log("Mouse up")}
+/>
+
+// ✅ Pointer events work with mouse, touch, and pen
+<T.Mesh
+  onPointerDown={() => console.log("Pointer down")}
+  onPointerUp={() => console.log("Pointer up")}
+/>
+```
+
+## Wheel Events
+
+Handle mouse wheel interactions:
+
+```tsx
+function ZoomableObject() {
+  const [scale, setScale] = createSignal(1)
+  
+  return (
+    <T.Mesh
+      scale={scale()}
+      onWheel={(e) => {
+        e.stopPropagation()
+        const delta = e.nativeEvent.deltaY > 0 ? 0.9 : 1.1
+        setScale(s => Math.max(0.1, Math.min(10, s * delta)))
+      }}
+    >
+      <T.SphereGeometry args={[1, 32, 32]} />
+      <T.MeshStandardMaterial />
+    </T.Mesh>
+  )
+}
+```
+
+## Context Menu
+
+Handle right-click events:
+
+```tsx
+function ContextMenuExample() {
+  return (
+    <T.Mesh
+      onContextMenu={(e) => {
+        e.nativeEvent.preventDefault() // Prevent browser context menu
+        console.log("Right clicked at:", e.point)
+        // Show custom context menu
+      }}
+      onContextMenuMissed={() => {
+        console.log("Right clicked outside")
+        // Hide custom context menu
+      }}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial />
+    </T.Mesh>
+  )
+}
+```
+
+## Advanced Event Handling
+
+### Using Event Properties
+
+```tsx
+function DetailedEventInfo() {
+  return (
+    <T.Mesh
+      onClick={(e) => {
+        console.log("Distance from camera:", e.distance)
+        console.log("Face index:", e.faceIndex)
+        console.log("UV coordinates:", e.uv)
+        console.log("World position:", e.point)
+        console.log("Camera used:", e.camera)
+      }}
+    >
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  )
+}
+```
+
+### Instanced Mesh Events
+
+```tsx
+function InstancedMeshEvents() {
+  const meshRef = useRef()
+  
+  return (
+    <T.InstancedMesh
+      ref={meshRef}
+      args={[null, null, 1000]}
+      onClick={(e) => {
+        console.log("Clicked instance:", e.instanceId)
+        // Modify specific instance
+        const color = new THREE.Color()
+        meshRef.current.getColorAt(e.instanceId, color)
+        color.setHex(0xff0000)
+        meshRef.current.setColorAt(e.instanceId, color)
+        meshRef.current.instanceColor.needsUpdate = true
+      }}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial />
+    </T.InstancedMesh>
+  )
+}
+```

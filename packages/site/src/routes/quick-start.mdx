@@ -1,0 +1,98 @@
+---
+title: Quick Start
+---
+
+# Quick Start
+
+This guide will walk you through creating your first 3D scene with solid-three.
+
+## Basic Setup
+
+First, import the necessary components from solid-three and three.js:
+
+```tsx
+import { Canvas, createT } from "solid-three";
+import * as THREE from "three";
+
+// Create the T namespace for typed components
+const T = createT(THREE);
+```
+
+## Your First Scene
+
+Here's a simple spinning cube example:
+
+```tsx
+import { createSignal } from "solid-js";
+import { Canvas, createT, useFrame } from "solid-three";
+import * as THREE from "three";
+
+const T = createT(THREE);
+
+function SpinningCube() {
+  const [rotation, setRotation] = createSignal(0);
+  
+  useFrame((state, delta) => {
+    setRotation(r => r + delta);
+  });
+  
+  return (
+    <T.Mesh rotation-y={rotation()}>
+      <T.BoxGeometry args={[1, 1, 1]} />
+      <T.MeshStandardMaterial color="hotpink" />
+    </T.Mesh>
+  );
+}
+
+function App() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+      <SpinningCube />
+    </Canvas>
+  );
+}
+```
+
+## Understanding the Code
+
+1. **Canvas**: The root component that sets up the WebGL renderer and scene
+2. **T namespace**: Created with `createT(THREE)` to provide typed three.js components
+3. **Lights**: AmbientLight provides overall illumination, DirectionalLight creates shadows
+4. **Mesh**: The basic 3D object that combines geometry and material
+5. **useFrame**: Hook that runs on every frame for animations
+6. **Reactive props**: The `rotation-y` prop updates reactively based on the signal
+
+## Two Ways to Create Objects
+
+solid-three provides two ways to create three.js objects:
+
+### Using T Components (Recommended for Apps)
+
+```tsx
+const T = createT(THREE);
+
+<T.Mesh>
+  <T.BoxGeometry args={[1, 1, 1]} />
+  <T.MeshStandardMaterial color="red" />
+</T.Mesh>
+```
+
+### Using Entity (Recommended for Libraries)
+
+```tsx
+import { Entity } from "solid-three";
+
+<Entity from={THREE.Mesh}>
+  <Entity from={THREE.BoxGeometry} args={[1, 1, 1]} />
+  <Entity from={THREE.MeshStandardMaterial} args={["red"]} />
+</Entity>
+```
+
+## What's Next?
+
+- Learn about the [Canvas](/api/canvas) component and its configuration options
+- Explore [Hooks](/api/hooks/use-three) for accessing the three.js context
+- Understand the [Event System](/api/events/overview) for user interactions
+- Check out [Examples](/examples/basic) for more complex scenes

@@ -1,0 +1,240 @@
+---
+title: Testing
+---
+
+# Testing Utilities
+
+Available from `"solid-three/testing"` for testing solid-three components.
+
+## Available Utilities
+
+- **TestCanvas**: A lightweight Canvas component for testing
+- **test**: Testing utilities for solid-three components
+
+## TestCanvas
+
+A minimal Canvas implementation for unit tests that doesn't require a real WebGL context:
+
+```tsx
+import { TestCanvas } from "solid-three/testing"
+import { render } from "solid-testing-library"
+
+test("renders a basic mesh", () => {
+  const { getByTestId } = render(
+    <TestCanvas>
+      <T.Mesh data-testid="test-mesh">
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+    </TestCanvas>
+  )
+  
+  expect(getByTestId("test-mesh")).toBeInTheDocument()
+})
+```
+
+## Component Testing
+
+### Testing Props
+
+```tsx
+function InteractiveBox(props) {
+  const [clicked, setClicked] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      {...props}
+      scale={clicked() ? 1.5 : 1}
+      onClick={() => setClicked(true)}
+      data-testid="interactive-box"
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial color={clicked() ? "red" : "blue"} />
+    </T.Mesh>
+  )
+}
+
+test("interactive box responds to props", () => {
+  const { getByTestId, rerender } = render(
+    <TestCanvas>
+      <InteractiveBox position={[1, 2, 3]} />
+    </TestCanvas>
+  )
+  
+  const mesh = getByTestId("interactive-box")
+  expect(mesh.position.toArray()).toEqual([1, 2, 3])
+  
+  // Test prop updates
+  rerender(
+    <TestCanvas>
+      <InteractiveBox position={[4, 5, 6]} />
+    </TestCanvas>
+  )
+  
+  expect(mesh.position.toArray()).toEqual([4, 5, 6])
+})
+```
+
+### Testing Hooks
+
+```tsx
+function AnimatedComponent() {
+  const [rotation, setRotation] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    setRotation(r => r + delta)
+  })
+  
+  return (
+    <T.Mesh rotation-y={rotation()} data-testid="animated-mesh">
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  )
+}
+
+test("useFrame updates rotation", async () => {
+  const { getByTestId } = render(
+    <TestCanvas>
+      <AnimatedComponent />
+    </TestCanvas>
+  )
+  
+  const mesh = getByTestId("animated-mesh")
+  const initialRotation = mesh.rotation.y
+  
+  // Advance frame (TestCanvas provides frame advancement utilities)
+  await advanceFrame(0.016) // 16ms
+  
+  expect(mesh.rotation.y).toBeGreaterThan(initialRotation)
+})
+```
+
+### Testing Events
+
+```tsx
+function ClickableBox() {
+  const [clicked, setClicked] = createSignal(false)
+  
+  return (
+    <T.Mesh
+      onClick={() => setClicked(true)}
+      data-testid="clickable-box"
+    >
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial color={clicked() ? "red" : "blue"} />
+    </T.Mesh>
+  )
+}
+
+test("handles click events", async () => {
+  const { getByTestId } = render(
+    <TestCanvas>
+      <ClickableBox />
+    </TestCanvas>
+  )
+  
+  const mesh = getByTestId("clickable-box")
+  
+  // Simulate click event
+  await fireEvent.click(mesh)
+  
+  expect(mesh.material.color.getHex()).toBe(0xff0000) // red
+})
+```
+
+## Integration Testing
+
+### Testing with Suspense
+
+```tsx
+function AsyncComponent() {
+  const texture = useLoader(TextureLoader, "/test-texture.jpg")
+  
+  return (
+    <T.Mesh data-testid="textured-mesh">
+      <T.PlaneGeometry />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+
+test("handles async loading", async () => {
+  const { getByTestId, queryByText } = render(
+    <TestCanvas>
+      <Suspense fallback={<div>Loading...</div>}>
+        <AsyncComponent />
+      </Suspense>
+    </TestCanvas>
+  )
+  
+  // Initially shows loading
+  expect(queryByText("Loading...")).toBeInTheDocument()
+  
+  // Wait for texture to load
+  await waitFor(() => {
+    expect(getByTestId("textured-mesh")).toBeInTheDocument()
+  })
+  
+  expect(queryByText("Loading...")).not.toBeInTheDocument()
+})
+```
+
+### Mocking Three.js Objects
+
+```tsx
+// Mock expensive operations
+jest.mock('three', () => ({
+  ...jest.requireActual('three'),
+  WebGLRenderer: jest.fn().mockImplementation(() => ({
+    render: jest.fn(),
+    setSize: jest.fn(),
+    dispose: jest.fn(),
+  })),
+}))
+
+test("doesn't create real WebGL context", () => {
+  render(
+    <TestCanvas>
+      <T.Mesh>
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+    </TestCanvas>
+  )
+  
+  // Verify mock was called
+  expect(THREE.WebGLRenderer).toHaveBeenCalled()
+})
+```
+
+## Best Practices
+
+1. **Use TestCanvas** instead of Canvas for unit tests
+2. **Mock expensive operations** like WebGL contexts and large assets
+3. **Test component behavior** rather than THREE.js internals
+4. **Use data-testid** for reliable element selection
+5. **Test async operations** with proper waiting utilities
+
+```tsx
+// Good test structure
+describe("MyComponent", () => {
+  it("renders correctly", () => {
+    const { getByTestId } = render(
+      <TestCanvas>
+        <MyComponent data-testid="my-component" />
+      </TestCanvas>
+    )
+    
+    expect(getByTestId("my-component")).toBeInTheDocument()
+  })
+  
+  it("responds to prop changes", () => {
+    // Test prop reactivity
+  })
+  
+  it("handles user interactions", async () => {
+    // Test event handling
+  })
+})
+```

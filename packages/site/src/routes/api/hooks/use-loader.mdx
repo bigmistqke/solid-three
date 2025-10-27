@@ -1,0 +1,258 @@
+---
+title: useLoader
+---
+
+# useLoader
+
+Manages asynchronous resource loading such as textures or models and integrates with solid-js' reactivity system. This hook can be used with Solid's `<Suspense>` to handle loading states.
+
+## Features
+
+- Automatic caching via LoaderCache by default
+- Supports single and multiple resource loading
+- Reactive URL changes
+- Custom cache implementations
+- Loading callbacks
+
+## Options
+
+- **base**: Base URL for resolving relative paths
+- **cache**: `true` to use global cache, `LoaderRegistry` instance for custom cache, or `false` to disable
+- **onBeforeLoad**: Callback before loading starts (e.g., to set loader properties)
+- **onLoad**: Callback after resource loads successfully
+
+## TypeScript Interface
+
+```typescript
+interface UseLoaderOptions<TLoader, TResult> {
+  base?: string
+  cache?: true | LoaderRegistry | false
+  onBeforeLoad?(loader: TLoader): void
+  onLoad?(resource: TResult): void
+}
+```
+
+## Single Resource Loading
+
+```tsx
+import { useLoader } from "solid-three"
+import { TextureLoader, GLTFLoader } from "three"
+
+function TexturedCube() {
+  // Load a single texture
+  const texture = useLoader(TextureLoader, "texture.jpg")
+  
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+
+function Model() {
+  // Load a GLTF model
+  const gltf = useLoader(GLTFLoader, "model.gltf")
+  
+  return <Entity from={gltf().scene} />
+}
+```
+
+## Multiple Resources with Object Keys
+
+Load multiple resources with descriptive names:
+
+```tsx
+function MultiTexturedMesh() {
+  const textures = useLoader(TextureLoader, {
+    diffuse: "wood-diffuse.jpg",
+    normal: "wood-normal.jpg",
+    roughness: "wood-roughness.jpg"
+  })
+  
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial
+        map={textures().diffuse}
+        normalMap={textures().normal}
+        roughnessMap={textures().roughness}
+      />
+    </T.Mesh>
+  )
+}
+```
+
+## Reactive URLs
+
+URLs can be signals or accessor functions:
+
+```tsx
+function DynamicTexture() {
+  const [textureUrl, setTextureUrl] = createSignal("texture1.jpg")
+  const texture = useLoader(TextureLoader, textureUrl)
+  
+  return (
+    <>
+      <T.Mesh>
+        <T.PlaneGeometry />
+        <T.MeshBasicMaterial map={texture()} />
+      </T.Mesh>
+      
+      <button onClick={() => setTextureUrl("texture2.jpg")}>
+        Change Texture
+      </button>
+    </>
+  )
+}
+```
+
+## Cube Texture Loading
+
+Load cube textures for environment mapping:
+
+```tsx
+function EnvironmentMapped() {
+  const cubeTexture = useLoader(
+    CubeTextureLoader,
+    [
+      "px.jpg", "nx.jpg", // positive/negative x
+      "py.jpg", "ny.jpg", // positive/negative y
+      "pz.jpg", "nz.jpg"  // positive/negative z
+    ]
+  )
+  
+  return (
+    <>
+      <T.Scene background={cubeTexture()} />
+      <T.Mesh>
+        <T.SphereGeometry args={[1, 32, 32]} />
+        <T.MeshStandardMaterial 
+          envMap={cubeTexture()} 
+          metalness={1} 
+          roughness={0} 
+        />
+      </T.Mesh>
+    </>
+  )
+}
+```
+
+## With Loading Options
+
+```tsx
+function TextureWithCallbacks() {
+  const texture = useLoader(
+    TextureLoader,
+    "texture.jpg",
+    {
+      base: "/assets/textures/",
+      onBeforeLoad: (loader) => {
+        // Configure loader before loading
+        loader.setPath("/custom/path/")
+      },
+      onLoad: (texture) => {
+        // Process texture after loading
+        texture.wrapS = THREE.RepeatWrapping
+        texture.wrapT = THREE.RepeatWrapping
+        texture.repeat.set(2, 2)
+      }
+    }
+  )
+  
+  return (
+    <T.Mesh>
+      <T.PlaneGeometry args={[5, 5]} />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+```
+
+## Cache Control
+
+### Disable Caching for Specific Resources
+
+```tsx
+const dynamicTexture = useLoader(
+  TextureLoader,
+  "/api/generate-texture",
+  { cache: false }
+)
+```
+
+### Custom Cache Implementation
+
+```tsx
+class CustomCache implements LoaderRegistry {
+  private cache = new Map()
+  
+  set(loader, url, data) {
+    const key = `${loader.name}-${url}`
+    this.cache.set(key, data)
+  }
+  
+  get(loader, url) {
+    const key = `${loader.name}-${url}`
+    return this.cache.get(key)
+  }
+}
+
+const customCache = new CustomCache()
+
+function CustomCachedTexture() {
+  const texture = useLoader(
+    TextureLoader,
+    "texture.jpg",
+    { cache: customCache }
+  )
+  
+  return <T.MeshBasicMaterial map={texture()} />
+}
+```
+
+### Global Cache Management
+
+```tsx
+import { useLoader } from "solid-three"
+
+// Disable global caching
+useLoader.cache = undefined
+
+// Or replace with custom implementation
+useLoader.cache = new CustomCache()
+
+// Access the default cache
+const cache = useLoader.cache
+
+// Dispose specific resource
+cache.dispose(TextureLoader, "texture.jpg")
+
+// Dispose all unreferenced resources
+cache.disposeFreeList()
+```
+
+## Integration with Suspense
+
+```tsx
+import { Suspense } from "solid-js"
+
+function LoadingFallback() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial color="gray" wireframe />
+    </T.Mesh>
+  )
+}
+
+function App() {
+  return (
+    <Canvas>
+      <Suspense fallback={<LoadingFallback />}>
+        <TexturedModel />
+      </Suspense>
+    </Canvas>
+  )
+}
+```

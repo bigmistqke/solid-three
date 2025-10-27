@@ -1,0 +1,99 @@
+---
+title: T Components
+---
+
+# T Components
+
+The `T` namespace contains components that wrap `three.js` objects, allowing you to insert them into your scene declaratively. You create the namespace using the `createT()` factory function.
+
+## Creating the T Namespace
+
+### Complete three.js Import
+
+```tsx
+import { createT } from "solid-three"
+import * as THREE from "three"
+
+// Create T namespace with all three.js objects
+const T = createT(THREE)
+
+// Now you can use T components
+<T.Mesh>
+  <T.BoxGeometry args={[1, 1, 1]} />
+  <T.MeshBasicMaterial color="hotpink" />
+</T.Mesh>
+```
+
+### Tree-Shaking Approach
+
+For better bundle sizes, import only what you need:
+
+```tsx
+import { createT } from "solid-three"
+import { Mesh, BoxGeometry, MeshBasicMaterial } from "three"
+
+// Create T namespace with only specific objects
+const T = createT({ Mesh, BoxGeometry, MeshBasicMaterial })
+```
+
+## Usage Patterns
+
+### In Applications
+Create a single `T` and export it for use throughout your app:
+
+```tsx
+// lib/three.ts
+import { createT } from "solid-three"
+import * as THREE from "three"
+
+export const T = createT(THREE)
+
+// components/Scene.tsx
+import { T } from "../lib/three"
+
+export function Scene() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial />
+    </T.Mesh>
+  )
+}
+```
+
+### In Libraries
+Use [`<Entity/>`](/api/entity) instead to avoid forcing consumers to create a T namespace, or create multiple `T` instances to allow for tree-shaking.
+
+### Multiple T Instances
+Create multiple T instances for lazy loading different parts of three.js:
+
+```tsx
+// Core objects loaded immediately
+const T = createT({ Mesh, BoxGeometry, MeshBasicMaterial })
+
+// Post-processing loaded on demand
+const TPost = createT(await import("three/examples/jsm/postprocessing"))
+```
+
+## Props and Arguments
+
+T components accept the same props as their three.js counterparts:
+
+```tsx
+<T.Mesh
+  position={[0, 1, 0]}
+  rotation-y={Math.PI / 4}
+  scale={2}
+>
+  <T.BoxGeometry args={[1, 1, 1, 4, 4, 4]} />
+  <T.MeshStandardMaterial 
+    color="orange" 
+    roughness={0.5} 
+    metalness={0.8}
+  />
+</T.Mesh>
+```
+
+## TypeScript Support
+
+T components are fully typed based on the three.js objects they wrap. You get full IntelliSense for props and arguments.

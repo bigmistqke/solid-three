@@ -1,0 +1,94 @@
+---
+title: useThree
+---
+
+# useThree
+
+Provides access to the `three.js` context, including the renderer, scene, camera, and more. This hook can be used with or without a selector function for optimized access to specific properties.
+
+## Returns
+
+- **bounds** (`Measure`): Reactive canvas bounds measurement
+- **camera** (`Camera`): The current camera
+- **setCamera** (`(camera: Camera) => () => void`): A setter-function for setting the current camera
+- **canvas** (`HTMLCanvasElement`): The canvas DOM element
+- **clock** (`Clock`): The `three.js` clock for timing
+- **dpr** (`number`): Device pixel ratio
+- **gl** (`WebGLRenderer`): The WebGL renderer instance
+- **raycaster** (`Raycaster`): The current raycaster used for pointer events
+- **setRaycaster** (`(raycaster: Raycaster) => () => void`): A setter-function for setting the current raycaster
+- **render** (`(delta: number) => void`): Function to manually trigger a render
+- **requestRender** (`() => void`): Function to request a render on the next frame
+- **scene** (`Scene`): The root scene
+- **xr** (`{ connect: () => void; disconnect: () => void }`): WebXR connection management
+
+## Camera and Raycaster Stack System
+
+`solid-three` implements a stack-based system for managing its current camera and raycaster:
+
+- **Stack-based Management**: Both cameras and raycasters are managed as stacks internally
+- **Default at Tail**: The `defaultCamera` and `defaultRaycaster` from Canvas props form the tail of their respective stacks
+- **Current Active Camera at Head**: The camera/raycaster at the top of the stack is the currently active camera/raycaster
+- **Push To The Stack To Become Active**: By calling `setCamera(camera)` and `setRaycaster(raycaster)`, the camera/raycaster is pushed to the stack. This causes it to become the currently active camera/raycaster
+- **Pop From The Stack To Deactivate**: `setCamera(camera)` and `setRaycaster(raycaster)` return a cleanup-function to pop the camera/raycaster from the stack. If the camera/raycaster was on top of the stack, the previous camera/raycaster in the stack becomes active again
+
+## Basic Usage
+
+```tsx
+const three = useThree()
+
+createEffect(() => {
+  console.log("Canvas size:", three.bounds.width, three.bounds.height)
+  console.log("Current camera:", three.camera)
+  console.log("WebGL renderer:", three.gl)
+})
+```
+
+## Camera Switching Example
+
+```tsx
+const three = useThree()
+const [useOrtho, setUseOrtho] = createSignal(false)
+
+createEffect(() => {
+  if (useOrtho()) {
+    const orthoCamera = new OrthographicCamera(-5, 5, 5, -5, 0.1, 1000)
+    orthoCamera.position.set(0, 0, 5)
+
+    // Push ortho camera onto stack
+    const restore = three.setCamera(orthoCamera)
+
+    // Cleanup automatically restores previous camera
+    onCleanup(restore)
+  }
+})
+```
+
+## Selective Access with Selector
+
+For better performance, you can use a selector function to access only specific properties:
+
+```tsx
+// Only access the camera - won't rerun when other properties change
+const camera = useThree(state => state.camera)
+
+// Access multiple properties
+const { gl, scene } = useThree(state => ({ 
+  gl: state.gl, 
+  scene: state.scene 
+}))
+```
+
+## Manual Rendering
+
+Control when the scene renders:
+
+```tsx
+const three = useThree()
+
+// Request a single render on next frame
+three.requestRender()
+
+// Manually render with a specific delta time
+three.render(0.016) // 16ms delta
+```

@@ -1,0 +1,109 @@
+---
+title: Event System Overview
+---
+
+# Event System Overview
+
+`solid-three` provides a comprehensive event system that integrates three.js pointer and mouse events with SolidJS's reactive system.
+
+## How It Works
+
+The event system automatically:
+- Performs raycasting on pointer/mouse events
+- Determines which objects are hit
+- Propagates events through the scene graph
+- Handles event bubbling and capturing
+- Manages hover states
+
+## Basic Usage
+
+```tsx
+<T.Mesh
+  onClick={(e) => {
+    console.log("Mesh clicked!", e)
+  }}
+  onPointerMove={(e) => {
+    console.log("Pointer moved over mesh", e.point)
+  }}
+  onPointerEnter={(e) => {
+    e.object.material.color.set("hotpink")
+  }}
+  onPointerLeave={(e) => {
+    e.object.material.color.set("orange")
+  }}
+>
+  <T.BoxGeometry />
+  <T.MeshStandardMaterial color="orange" />
+</T.Mesh>
+```
+
+## Event Object
+
+All events receive an enhanced event object with three.js specific properties:
+
+```tsx
+interface ThreeEvent {
+  // Standard DOM event properties
+  nativeEvent: PointerEvent | MouseEvent
+  
+  // Three.js specific
+  camera: Camera
+  ray: Ray
+  point: Vector3           // 3D point of intersection
+  distance: number         // Distance from camera
+  object: Object3D         // The object that was hit
+  instanceId?: number      // For instanced meshes
+  face?: Face             // Face that was hit
+  uv?: Vector2            // UV coordinates
+  
+  // Event control
+  stopPropagation: () => void
+  eventObject: Object3D    // Current object in propagation
+}
+```
+
+## Event Propagation
+
+Events bubble up through the scene graph by default:
+
+```tsx
+<T.Group onClick={() => console.log("Group clicked (bubbled)")}>
+  <T.Mesh onClick={(e) => {
+    console.log("Mesh clicked first")
+    // Uncomment to stop bubbling
+    // e.stopPropagation()
+  }}>
+    <T.BoxGeometry />
+    <T.MeshStandardMaterial />
+  </T.Mesh>
+</T.Group>
+```
+
+## Controlling Raycasting
+
+Use the `raycastable` prop to control raycasting behavior:
+
+```tsx
+// Disable raycasting completely
+<T.Mesh raycastable={false}>
+  {/* This mesh won't receive any events */}
+</T.Mesh>
+
+// Only children participate in raycasting
+<T.Group raycastable="children">
+  {/* Group itself won't be tested, only its children */}
+</T.Group>
+```
+
+## Performance Considerations
+
+1. **Raycast on Demand**: Raycasting only occurs when pointer/mouse events happen
+2. **Use `raycastable={false}`**: Disable raycasting for objects that don't need events
+3. **Event Delegation**: Use event handlers on parent groups instead of many individual handlers
+4. **Optimize Geometry**: Complex geometries take longer to raycast against
+
+## Next Steps
+
+- Learn about [Event Types](/api/events/types)
+- Understand [Event Propagation](/api/events/propagation) in detail
+- See [Examples](/examples/events) of event handling patterns

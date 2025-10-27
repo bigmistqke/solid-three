@@ -1,0 +1,354 @@
+---
+title: Event Examples
+---
+
+# Event Examples
+
+Examples demonstrating the event system in solid-three.
+
+## Basic Interactions
+
+```tsx
+import { createSignal } from "solid-js"
+import { Canvas, createT } from "solid-three"
+import * as THREE from "three"
+
+const T = createT(THREE)
+
+function InteractiveBox() {
+  const [hovered, setHovered] = createSignal(false)
+  const [clicked, setClicked] = createSignal(false)
+  const [position, setPosition] = createSignal([0, 0, 0])
+  
+  return (
+    <T.Mesh
+      position={position()}
+      scale={clicked() ? 1.5 : hovered() ? 1.1 : 1}
+      onClick={(e) => {
+        setClicked(!clicked())
+        console.log("Clicked at:", e.point)
+      }}
+      onPointerEnter={(e) => {
+        setHovered(true)
+        document.body.style.cursor = 'pointer'
+      }}
+      onPointerLeave={(e) => {
+        setHovered(false)
+        document.body.style.cursor = 'default'
+      }}
+      onPointerDown={(e) => {
+        console.log("Pointer down on:", e.object.name)
+      }}
+    >
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial 
+        color={clicked() ? "red" : hovered() ? "hotpink" : "orange"} 
+      />
+    </T.Mesh>
+  )
+}
+```
+
+## Dragging Objects
+
+```tsx
+function DraggableObject() {
+  const [position, setPosition] = createSignal([0, 0, 0])
+  const [isDragging, setIsDragging] = createSignal(false)
+  const [dragStart, setDragStart] = createSignal(null)
+  
+  const startDrag = (e) => {
+    setIsDragging(true)
+    setDragStart({
+      point: e.point.clone(),
+      position: [...position()]
+    })
+    document.body.style.cursor = 'grabbing'
+  }
+  
+  const endDrag = () => {
+    setIsDragging(false)
+    setDragStart(null)
+    document.body.style.cursor = 'default'
+  }
+  
+  return (
+    <>
+      <T.Mesh
+        position={position()}
+        onPointerDown={startDrag}
+        onPointerUp={endDrag}
+        onPointerMove={(e) => {
+          if (isDragging() && dragStart()) {
+            const delta = e.point.clone().sub(dragStart().point)
+            const newPos = [
+              dragStart().position[0] + delta.x,
+              dragStart().position[1] + delta.y,
+              dragStart().position[2] + delta.z
+            ]
+            setPosition(newPos)
+          }
+        }}
+      >
+        <T.BoxGeometry />
+        <T.MeshStandardMaterial 
+          color={isDragging() ? "yellow" : "blue"} 
+        />
+      </T.Mesh>
+      
+      {/* Canvas-level pointer up to handle drag end outside object */}
+      <Canvas onPointerUp={endDrag} />
+    </>
+  )
+}
+```
+
+## Click Outside Detection
+
+```tsx
+function SelectableObjects() {
+  const [selected, setSelected] = createSignal(null)
+  
+  const colors = ["red", "green", "blue"]
+  
+  return (
+    <>
+      <For each={colors}>
+        {(color, i) => (
+          <T.Mesh
+            position={[(i() - 1) * 2, 0, 0]}
+            onClick={() => setSelected(color)}
+            onClickMissed={() => setSelected(null)}
+          >
+            <T.BoxGeometry />
+            <T.MeshStandardMaterial 
+              color={color}
+              emissive={selected() === color ? color : "black"}
+              emissiveIntensity={selected() === color ? 0.3 : 0}
+            />
+          </T.Mesh>
+        )}
+      </For>
+      
+      <div style={{
+        position: 'absolute',
+        top: '10px',
+        left: '10px',
+        color: 'white'
+      }}>
+        Selected: {selected() || "None"}
+      </div>
+    </>
+  )
+}
+```
+
+## Context Menu
+
+```tsx
+function ContextMenuExample() {
+  const [menuPosition, setMenuPosition] = createSignal(null)
+  const [selectedObject, setSelectedObject] = createSignal(null)
+  
+  const showContextMenu = (e) => {
+    e.nativeEvent.preventDefault()
+    setMenuPosition({ x: e.nativeEvent.clientX, y: e.nativeEvent.clientY })
+    setSelectedObject(e.object)
+  }
+  
+  const hideContextMenu = () => {
+    setMenuPosition(null)
+    setSelectedObject(null)
+  }
+  
+  const deleteObject = () => {
+    // Remove object logic here
+    console.log("Delete:", selectedObject())
+    hideContextMenu()
+  }
+  
+  return (
+    <>
+      <T.Mesh
+        onContextMenu={showContextMenu}
+        onContextMenuMissed={hideContextMenu}
+      >
+        <T.BoxGeometry />
+        <T.MeshStandardMaterial color="purple" />
+      </T.Mesh>
+      
+      <Show when={menuPosition()}>
+        <div 
+          style={{
+            position: 'fixed',
+            left: `${menuPosition().x}px`,
+            top: `${menuPosition().y}px`,
+            background: 'white',
+            border: '1px solid #ccc',
+            padding: '5px',
+            'z-index': 1000
+          }}
+        >
+          <div onClick={deleteObject} style={{ cursor: 'pointer' }}>
+            Delete
+          </div>
+          <div onClick={hideContextMenu} style={{ cursor: 'pointer' }}>
+            Cancel
+          </div>
+        </div>
+      </Show>
+    </>
+  )
+}
+```
+
+## Event Propagation
+
+```tsx
+function PropagationExample() {
+  const [log, setLog] = createSignal([])
+  
+  const addLog = (message) => {
+    setLog(prev => [...prev.slice(-4), message])
+  }
+  
+  return (
+    <>
+      <T.Group
+        onClick={() => addLog("Group clicked")}
+      >
+        <T.Mesh
+          position={[-1, 0, 0]}
+          onClick={(e) => {
+            addLog("Left mesh clicked")
+            // Event bubbles to group
+          }}
+        >
+          <T.BoxGeometry />
+          <T.MeshStandardMaterial color="red" />
+        </T.Mesh>
+        
+        <T.Mesh
+          position={[1, 0, 0]}
+          onClick={(e) => {
+            addLog("Right mesh clicked (stopped)")
+            e.stopPropagation() // Prevents group click
+          }}
+        >
+          <T.BoxGeometry />
+          <T.MeshStandardMaterial color="blue" />
+        </T.Mesh>
+      </T.Group>
+      
+      <div style={{
+        position: 'absolute',
+        bottom: '10px',
+        left: '10px',
+        color: 'white',
+        'font-family': 'monospace'
+      }}>
+        <For each={log()}>
+          {(entry, i) => <div>{entry}</div>}
+        </For>
+      </div>
+    </>
+  )
+}
+```
+
+## Hover Effects
+
+```tsx
+function HoverEffects() {
+  const [hoveredObject, setHoveredObject] = createSignal(null)
+  
+  const objects = [
+    { position: [-2, 0, 0], color: "red", name: "Red Box" },
+    { position: [0, 0, 0], color: "green", name: "Green Box" },
+    { position: [2, 0, 0], color: "blue", name: "Blue Box" },
+  ]
+  
+  return (
+    <>
+      <For each={objects}>
+        {(obj) => (
+          <T.Mesh
+            position={obj.position}
+            scale={hoveredObject() === obj.name ? 1.2 : 1}
+            onPointerEnter={() => setHoveredObject(obj.name)}
+            onPointerLeave={() => setHoveredObject(null)}
+          >
+            <T.BoxGeometry />
+            <T.MeshStandardMaterial 
+              color={obj.color}
+              opacity={hoveredObject() && hoveredObject() !== obj.name ? 0.5 : 1}
+              transparent
+            />
+          </T.Mesh>
+        )}
+      </For>
+      
+      <div style={{
+        position: 'absolute',
+        top: '10px',
+        left: '10px',
+        color: 'white'
+      }}>
+        Hovering: {hoveredObject() || "None"}
+      </div>
+    </>
+  )
+}
+```
+
+## Wheel Events
+
+```tsx
+function ZoomableObject() {
+  const [scale, setScale] = createSignal(1)
+  
+  return (
+    <T.Mesh
+      scale={scale()}
+      onWheel={(e) => {
+        e.stopPropagation()
+        const delta = e.nativeEvent.deltaY > 0 ? 0.9 : 1.1
+        setScale(s => Math.max(0.1, Math.min(5, s * delta)))
+      }}
+    >
+      <T.SphereGeometry args={[1, 32, 32]} />
+      <T.MeshStandardMaterial wireframe />
+    </T.Mesh>
+  )
+}
+```
+
+## Performance Tips
+
+1. **Use event delegation**: Handle events on parent groups when possible
+2. **Avoid creating handlers in render**: Define handlers outside component or use callbacks
+3. **Use `raycastable={false}`**: Disable raycasting for non-interactive objects
+4. **Batch state updates**: Update multiple signals together when handling events
+
+```tsx
+// Good: Event delegation
+function EfficientEventHandling() {
+  const handleObjectClick = (e) => {
+    const objectName = e.object.name
+    console.log(`Clicked: ${objectName}`)
+  }
+  
+  return (
+    <T.Group onClick={handleObjectClick}>
+      <T.Mesh name="box1" position={[-1, 0, 0]}>
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+      <T.Mesh name="box2" position={[1, 0, 0]}>
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial />
+      </T.Mesh>
+    </T.Group>
+  )
+}
+```

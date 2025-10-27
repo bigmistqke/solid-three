@@ -1,0 +1,397 @@
+---
+title: Loading Assets
+---
+
+# Loading Assets
+
+Examples of loading and using various types of assets in solid-three.
+
+## Loading Textures
+
+```tsx
+import { Suspense } from "solid-js"
+import { Canvas, createT, useLoader, Resource } from "solid-three"
+import { TextureLoader } from "three"
+
+const T = createT(THREE)
+
+function TexturedPlane() {
+  const texture = useLoader(TextureLoader, "/textures/wood.jpg")
+  
+  return (
+    <T.Mesh>
+      <T.PlaneGeometry args={[5, 5]} />
+      <T.MeshStandardMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+
+function TextureExample() {
+  return (
+    <Canvas>
+      <Suspense fallback={<LoadingIndicator />}>
+        <TexturedPlane />
+      </Suspense>
+    </Canvas>
+  )
+}
+
+function LoadingIndicator() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry args={[1, 1, 1]} />
+      <T.MeshBasicMaterial color="gray" wireframe />
+    </T.Mesh>
+  )
+}
+```
+
+## Multiple Textures with Resource
+
+```tsx
+function MultiTexturedMaterial() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial>
+        <Resource 
+          loader={TextureLoader} 
+          url="/textures/diffuse.jpg" 
+          attach="map" 
+        />
+        <Resource 
+          loader={TextureLoader} 
+          url="/textures/normal.jpg" 
+          attach="normalMap" 
+        />
+        <Resource 
+          loader={TextureLoader} 
+          url="/textures/roughness.jpg" 
+          attach="roughnessMap" 
+        />
+      </T.MeshStandardMaterial>
+    </T.Mesh>
+  )
+}
+```
+
+## Loading GLTF Models
+
+```tsx
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
+
+function Model({ url, ...props }) {
+  const gltf = useLoader(GLTFLoader, url)
+  
+  return (
+    <Entity 
+      from={gltf().scene} 
+      {...props}
+      traverse={(child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+      }}
+    />
+  )
+}
+
+function ModelExample() {
+  return (
+    <Canvas shadows>
+      <T.AmbientLight intensity={0.3} />
+      <T.DirectionalLight 
+        position={[5, 5, 5]} 
+        intensity={1}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+      />
+      
+      <Suspense fallback={<ModelPlaceholder />}>
+        <Model 
+          url="/models/character.glb" 
+          scale={0.01}
+          position={[0, -1, 0]}
+        />
+      </Suspense>
+      
+      {/* Ground plane */}
+      <T.Mesh rotation-x={-Math.PI / 2} position={[0, -1, 0]} receiveShadow>
+        <T.PlaneGeometry args={[10, 10]} />
+        <T.MeshStandardMaterial color="#f0f0f0" />
+      </T.Mesh>
+    </Canvas>
+  )
+}
+
+function ModelPlaceholder() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry args={[1, 2, 0.5]} />
+      <T.MeshBasicMaterial color="gray" wireframe />
+    </T.Mesh>
+  )
+}
+```
+
+## Animated GLTF Models
+
+```tsx
+function AnimatedModel({ url }) {
+  const gltf = useLoader(GLTFLoader, url)
+  const [mixer, setMixer] = createSignal(null)
+  const [actions, setActions] = createSignal([])
+  
+  createEffect(() => {
+    const loadedGltf = gltf()
+    if (loadedGltf.animations.length > 0) {
+      const animationMixer = new THREE.AnimationMixer(loadedGltf.scene)
+      const animationActions = loadedGltf.animations.map(clip => 
+        animationMixer.clipAction(clip)
+      )
+      
+      setMixer(animationMixer)
+      setActions(animationActions)
+      
+      // Play first animation
+      animationActions[0]?.play()
+    }
+  })
+  
+  useFrame((_, delta) => {
+    mixer()?.update(delta)
+  })
+  
+  return (
+    <>
+      <Entity from={gltf().scene} />
+      
+      {/* Animation controls */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px'
+      }}>
+        <For each={gltf().animations}>
+          {(animation, i) => (
+            <button 
+              onClick={() => {
+                actions().forEach(action => action.stop())
+                actions()[i()]?.play()
+              }}
+            >
+              {animation.name || `Animation ${i() + 1}`}
+            </button>
+          )}
+        </For>
+      </div>
+    </>
+  )
+}
+```
+
+## Environment Maps
+
+```tsx
+import { CubeTextureLoader } from "three"
+
+function EnvironmentScene() {
+  const envMap = useLoader(
+    CubeTextureLoader,
+    [
+      '/env/px.jpg', '/env/nx.jpg',
+      '/env/py.jpg', '/env/ny.jpg', 
+      '/env/pz.jpg', '/env/nz.jpg'
+    ]
+  )
+  
+  return (
+    <>
+      <T.Scene background={envMap()} />
+      
+      <T.Mesh>
+        <T.SphereGeometry args={[1, 64, 32]} />
+        <T.MeshStandardMaterial 
+          envMap={envMap()}
+          metalness={1}
+          roughness={0}
+        />
+      </T.Mesh>
+    </>
+  )
+}
+```
+
+## Custom Loader Configuration
+
+```tsx
+function ConfiguredLoader() {
+  const texture = useLoader(
+    TextureLoader,
+    "/textures/pattern.jpg",
+    {
+      onBeforeLoad: (loader) => {
+        // Configure loader before loading
+        loader.crossOrigin = "anonymous"
+      },
+      onLoad: (texture) => {
+        // Configure texture after loading
+        texture.wrapS = THREE.RepeatWrapping
+        texture.wrapT = THREE.RepeatWrapping
+        texture.repeat.set(4, 4)
+        texture.flipY = false
+      }
+    }
+  )
+  
+  return (
+    <T.Mesh>
+      <T.PlaneGeometry args={[5, 5]} />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+```
+
+## Loading with Progress
+
+```tsx
+function LoadingWithProgress() {
+  const [progress, setProgress] = createSignal(0)
+  const [loaded, setLoaded] = createSignal(false)
+  
+  const gltf = useLoader(
+    GLTFLoader,
+    "/models/large-model.glb",
+    {
+      onBeforeLoad: (loader) => {
+        loader.manager.onProgress = (url, itemsLoaded, itemsTotal) => {
+          setProgress(itemsLoaded / itemsTotal)
+        }
+        loader.manager.onLoad = () => {
+          setLoaded(true)
+        }
+      }
+    }
+  )
+  
+  return (
+    <>
+      <Show when={!loaded()}>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: 'white'
+        }}>
+          Loading: {Math.round(progress() * 100)}%
+          <div style={{
+            width: '200px',
+            height: '4px',
+            background: '#333',
+            'margin-top': '10px'
+          }}>
+            <div style={{
+              width: `${progress() * 100}%`,
+              height: '100%',
+              background: '#0099ff',
+              transition: 'width 0.3s'
+            }} />
+          </div>
+        </div>
+      </Show>
+      
+      <Show when={loaded()}>
+        <Entity from={gltf().scene} />
+      </Show>
+    </>
+  )
+}
+```
+
+## Error Handling
+
+```tsx
+function LoadingWithErrorHandling() {
+  const [error, setError] = createSignal(null)
+  
+  const texture = createResource(
+    () => "/textures/might-not-exist.jpg",
+    async (url) => {
+      try {
+        return await new Promise((resolve, reject) => {
+          new TextureLoader().load(
+            url,
+            resolve,
+            undefined,
+            reject
+          )
+        })
+      } catch (err) {
+        setError(err.message)
+        throw err
+      }
+    }
+  )
+  
+  return (
+    <ErrorBoundary fallback={(err) => (
+      <T.Mesh>
+        <T.BoxGeometry />
+        <T.MeshBasicMaterial color="red" />
+      </T.Mesh>
+    )}>
+      <Suspense fallback={<LoadingIndicator />}>
+        <T.Mesh>
+          <T.PlaneGeometry />
+          <T.MeshBasicMaterial map={texture()} />
+        </T.Mesh>
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
+```
+
+## Best Practices
+
+1. **Use Suspense**: Always wrap loading components in Suspense
+2. **Provide fallbacks**: Show loading states for better UX
+3. **Handle errors**: Use ErrorBoundary for failed loads
+4. **Cache resources**: Let useLoader cache automatically
+5. **Optimize assets**: Compress textures and models
+6. **Progressive loading**: Load low-res first, then high-res
+
+```tsx
+// Good loading pattern
+function OptimizedScene() {
+  return (
+    <Canvas>
+      <ErrorBoundary fallback={<ErrorScene />}>
+        <Suspense fallback={<LoadingScene />}>
+          <MainScene />
+        </Suspense>
+      </ErrorBoundary>
+    </Canvas>
+  )
+}
+
+function LoadingScene() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial color="gray" wireframe />
+    </T.Mesh>
+  )
+}
+
+function ErrorScene() {
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial color="red" />
+    </T.Mesh>
+  )
+}
+```

@@ -1,0 +1,130 @@
+---
+title: useFrame
+---
+
+# useFrame
+
+Registers a callback that will be called before every frame is rendered, useful for animations and updates.
+
+## Parameters
+
+- **callback** - Function called each frame with:
+  - **context** - The three.js context object (same as `useThree()`)
+  - **delta** - Time elapsed since last frame in seconds
+  - **frame** - Optional XRFrame for WebXR sessions
+- **options** - Optional configuration object:
+  - **priority** - Execution priority (lower numbers run first, default: 0)
+  - **stage** - Whether to run before or after rendering (default: "before")
+
+## TypeScript Interface
+
+```tsx
+useFrame(
+  callback: (context: Context, delta: number, frame?: XRFrame) => void,
+  options?: {
+    priority?: number
+    stage?: "before" | "after"
+  }
+)
+```
+
+## Basic Usage
+
+```tsx
+function RotatingCube() {
+  let mesh: THREE.Mesh = null!
+
+  useFrame((context, delta) => {
+    mesh.rotation.x += delta
+    mesh.rotation.y += delta * 0.5
+  })
+
+  return (
+    <T.Mesh ref={mesh}>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial color="orange" />
+    </T.Mesh>
+  )
+}
+```
+
+## Priority Control
+
+Lower priority numbers run first:
+
+```tsx
+// Runs first (priority: -1)
+useFrame(
+  (context, delta) => {
+    mesh.position.x = Math.sin(context.clock.elapsedTime) * 2
+  },
+  { priority: -1 }
+)
+
+// Runs after (priority: 10)
+useFrame(
+  (context, delta) => {
+    console.log("Position updated:", mesh.position.x)
+  },
+  { priority: 10 }
+)
+```
+
+## Before/After Render
+
+Control whether your callback runs before or after the scene renders:
+
+```tsx
+// Update animations before render (default)
+useFrame(
+  (context, delta) => {
+    mesh.rotation.y += delta
+  },
+  { stage: "before" }
+)
+
+// Run cleanup or analytics after render
+useFrame(
+  (context, delta) => {
+    console.info("Frame rendered in", delta * 1000, "ms")
+  },
+  { stage: "after" }
+)
+```
+
+## Advanced Example
+
+```tsx
+function ComplexAnimation() {
+  let mesh: THREE.Mesh = null!
+  const [speed, setSpeed] = createSignal(1)
+  const [paused, setPaused] = createSignal(false)
+
+  useFrame((context, delta) => {
+    if (paused()) return
+    
+    const time = context.clock.elapsedTime * speed()
+    
+    // Complex animations
+    mesh.position.x = Math.sin(time) * 2
+    mesh.position.y = Math.cos(time * 2) * 1
+    mesh.rotation.x = time * 0.5
+    mesh.rotation.y = time * 0.3
+    
+    // Scale pulsing
+    const scale = 1 + Math.sin(time * 3) * 0.1
+    mesh.scale.setScalar(scale)
+  })
+
+  return (
+    <T.Mesh ref={mesh}>
+      <T.IcosahedronGeometry args={[1, 2]} />
+      <T.MeshPhysicalMaterial 
+        color="cyan" 
+        metalness={0.8} 
+        roughness={0.2} 
+      />
+    </T.Mesh>
+  )
+}
+```

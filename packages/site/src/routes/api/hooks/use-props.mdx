@@ -1,0 +1,235 @@
+---
+title: useProps
+---
+
+# useProps
+
+The useProps hook manages and applies solid-three props to THREE.js objects. It sets up reactive effects to ensure properties are correctly applied and updated, manages children attachment, and handles automatic disposal.
+
+## Parameters
+
+- **object**: An accessor function that returns the target THREE.js object
+- **props**: Object containing props to apply (including `ref`, `children`, and THREE.js properties)
+
+## TypeScript Signature
+
+```typescript
+function useProps<T extends object>(object: Accessor<T>, props: any): void
+```
+
+## Features
+
+- **Reactive prop updates**: Automatically applies prop changes to the THREE.js object
+- **Ref assignment**: Handles both function refs and object refs
+- **Children management**: Attaches/detaches child objects from the scene graph
+- **Automatic disposal**: Cleans up the object when the component unmounts
+- **Special props**: Processes `onUpdate` callbacks after prop applications
+
+## Basic Usage
+
+This hook is primarily used internally by solid-three components, but can be useful when creating custom components:
+
+```tsx
+import { useProps, autodispose } from "solid-three"
+import { Mesh, BoxGeometry, MeshBasicMaterial } from "three"
+
+function CustomMesh(props) {
+  const mesh = createMemo(() => 
+    autodispose(new Mesh(
+      new BoxGeometry(), 
+      new MeshBasicMaterial()
+    ))
+  )
+  
+  // Apply solid-three props reactively to the mesh
+  useProps(mesh, props)
+  
+  return null
+}
+```
+
+## Advanced Usage - Custom Controls
+
+Creating custom camera controls that integrate with solid-three:
+
+```tsx
+import { useThree, useFrame, useProps, autodispose } from "solid-three"
+import { OrbitControls as ThreeOrbitControls } from "three/examples/jsm/controls/OrbitControls"
+
+export function OrbitControls(props) {
+  const three = useThree()
+  
+  const controls = createMemo(() => {
+    const ctrl = autodispose(new ThreeOrbitControls(
+      three.camera, 
+      three.gl.domElement
+    ))
+    ctrl.enableDamping = true
+    return ctrl
+  })
+  
+  // Update controls every frame
+  useFrame(() => controls().update())
+  
+  // Apply props reactively
+  useProps(controls, props)
+  
+  return null
+}
+
+// Usage
+<Canvas>
+  <OrbitControls 
+    enablePan={false}
+    maxDistance={10}
+    minDistance={2}
+    autoRotate
+    autoRotateSpeed={2}
+  />
+  {/* Scene content */}
+</Canvas>
+```
+
+## Custom Post-Processing Effects
+
+```tsx
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer"
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass"
+
+function BloomEffect(props) {
+  const three = useThree()
+  
+  const bloomPass = createMemo(() => {
+    const pass = autodispose(new UnrealBloomPass(
+      new THREE.Vector2(three.bounds.width, three.bounds.height),
+      1.5,  // strength
+      0.4,  // radius
+      0.85  // threshold
+    ))
+    return pass
+  })
+  
+  // Apply props to customize the bloom effect
+  useProps(bloomPass, props)
+  
+  // Add to composer (implementation depends on your setup)
+  createEffect(() => {
+    const composer = getComposer() // Your composer instance
+    composer.addPass(bloomPass())
+    
+    onCleanup(() => {
+      composer.removePass(bloomPass())
+    })
+  })
+  
+  return null
+}
+
+// Usage
+<BloomEffect 
+  strength={2}
+  radius={0.8}
+  threshold={0.5}
+/>
+```
+
+## Integrating Third-Party Libraries
+
+```tsx
+import { Water } from "three/examples/jsm/objects/Water"
+
+function WaterPlane(props) {
+  const waterGeometry = new THREE.PlaneGeometry(10000, 10000)
+  
+  const water = createMemo(() => {
+    const waterObj = autodispose(new Water(waterGeometry, {
+      textureWidth: 512,
+      textureHeight: 512,
+      waterNormals: new THREE.TextureLoader().load(
+        'waternormals.jpg',
+        texture => {
+          texture.wrapS = texture.wrapT = THREE.RepeatWrapping
+        }
+      ),
+      sunDirection: new THREE.Vector3(),
+      sunColor: 0xffffff,
+      waterColor: 0x001e0f,
+      distortionScale: 3.7,
+      fog: true
+    }))
+    
+    waterObj.rotation.x = -Math.PI / 2
+    return waterObj
+  })
+  
+  // Animate water
+  useFrame((state) => {
+    water().material.uniforms['time'].value += 1.0 / 60.0
+  })
+  
+  // Apply user props
+  useProps(water, props)
+  
+  return <Entity from={water()} />
+}
+
+// Usage
+<WaterPlane 
+  position={[0, 0, 0]}
+  distortionScale={5}
+  size={1.0}
+/>
+```
+
+## Creating Reusable Components
+
+```tsx
+function AnimatedBox(props) {
+  const { speed = 1, axis = 'y', ...meshProps } = splitProps(
+    props, 
+    ['speed', 'axis']
+  )
+  
+  const mesh = createMemo(() => 
+    autodispose(new THREE.Mesh(
+      new THREE.BoxGeometry(),
+      new THREE.MeshStandardMaterial()
+    ))
+  )
+  
+  useFrame((_, delta) => {
+    const m = mesh()
+    m.rotation[axis()] += delta * speed()
+  })
+  
+  // Apply remaining props to mesh
+  useProps(mesh, meshProps)
+  
+  return <Entity from={mesh()} />
+}
+
+// Usage
+<AnimatedBox 
+  position={[0, 1, 0]}
+  scale={2}
+  speed={2}
+  axis="x"
+  material-color="hotpink"
+/>
+```
+
+## When to Use
+
+- Creating custom components that wrap THREE.js objects
+- Integrating third-party THREE.js libraries
+- Building reusable controls or effects
+- Managing complex object lifecycles
+- When you need fine control over how props are applied
+
+## Important Notes
+
+1. Always use `autodispose` when creating THREE.js objects manually
+2. The object parameter should be an accessor (function) for reactivity
+3. Props are applied in a specific order: ref → properties → children → onUpdate
+4. The hook handles nested property access (e.g., `position-x`, `material-color`)
+5. Disposal happens automatically when the component unmounts

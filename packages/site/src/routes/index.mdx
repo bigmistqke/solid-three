@@ -1,0 +1,50 @@
+---
+title: solid-three
+layout: home
+
+hero:
+  text: solid-three
+  tagline: Declarative three.js with SolidJS
+  actions:
+    - text: Get Started
+      link: /installation
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/bigmistqke/solid-three
+  image:
+    src: https://assets.solidjs.com/banner?type=solid-three&background=tiles&project=%20
+---
+
+## Features
+
+- **Declarative `three.js` Components**: Utilize `three.js` objects as JSX components.
+- **Reactive Prop Updates**: Properties of 3D objects update reactively, promoting efficient re-renders.
+- **Integrated Animation Loop**: `useFrame` hook allows for easy animations.
+- **Comprehensive Event System**: Enhanced event handling with support for `three.js` pointer and mouse events.
+- **Extensible and Customizable**: Easily extendable with additional `three.js` entities or custom behaviors.
+- **Optimized for `solid-js`**: Leverages `solid-js`' fine-grained reactivity for optimal performance.
+
+## Quick Example
+
+```tsx
+import { Canvas, T } from "solid-three";
+import { createT } from "solid-three";
+import * as THREE from "three";
+
+// Create the T namespace
+const T = createT(THREE);
+
+function App() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[10, 10, 5]} intensity={1} />
+      
+      <T.Mesh>
+        <T.BoxGeometry args={[1, 1, 1]} />
+        <T.MeshStandardMaterial color="orange" />
+      </T.Mesh>
+    </Canvas>
+  );
+}
+```

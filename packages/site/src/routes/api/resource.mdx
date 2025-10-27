@@ -1,0 +1,186 @@
+---
+title: Resource
+---
+
+# Resource
+
+Wrapper component around 'useLoader' hook for declarative resource loading.
+
+## Props
+
+- **loader**: Three.js loader constructor (e.g., `TextureLoader`, `GLTFLoader`)
+- **url**: URL(s) to load, depending on what the passed loader expects
+- **children**: Optional render function
+- **cache**: Control caching behavior (default: true)
+- **\***: Additional props are passed to the loaded resource
+
+## Basic Texture Loading
+
+```tsx
+// CubeTextureLoader expects an array of strings
+<Resource 
+  loader={CubeTextureLoader} 
+  url={[
+    'px.png', 'nx.png',
+    'py.png', 'ny.png',
+    'pz.png', 'nz.png'
+  ]} 
+/>
+```
+
+## Setting Props on Resources
+
+The `attach` prop is commonly used to attach loaded resources to their parent:
+
+```tsx
+<T.MeshStandardMaterial>
+  <Resource loader={TextureLoader} url="diffuse.jpg" attach="map" />
+  <Resource loader={TextureLoader} url="normal.jpg" attach="normalMap" />
+  <Resource loader={TextureLoader} url="roughness.jpg" attach="roughnessMap" />
+</T.MeshStandardMaterial>
+```
+
+## Custom Rendering with Children Function
+
+For complex resources like GLTF models, use a children function to control rendering:
+
+```tsx
+<Resource loader={GLTFLoader} url="model.gltf">
+  {(gltf) => <Entity from={gltf.scene} scale={2} />}
+</Resource>
+```
+
+## Disabling Cache
+
+For dynamic resources that change frequently:
+
+```tsx
+<Resource 
+  loader={TextureLoader} 
+  url="/dynamic-texture.png" 
+  cache={false} 
+/>
+```
+
+## Advanced Examples
+
+### Loading Environment Maps
+
+```tsx
+function Scene() {
+  return (
+    <T.Scene>
+      <Resource 
+        loader={CubeTextureLoader}
+        url={[
+          '/env/px.jpg', '/env/nx.jpg',
+          '/env/py.jpg', '/env/ny.jpg',
+          '/env/pz.jpg', '/env/nz.jpg'
+        ]}
+        attach="background"
+      />
+      <T.Mesh>
+        <T.SphereGeometry args={[1, 32, 32]} />
+        <T.MeshStandardMaterial metalness={1} roughness={0}>
+          <Resource 
+            loader={CubeTextureLoader}
+            url={[
+              '/env/px.jpg', '/env/nx.jpg',
+              '/env/py.jpg', '/env/ny.jpg',
+              '/env/pz.jpg', '/env/nz.jpg'
+            ]}
+            attach="envMap"
+          />
+        </T.MeshStandardMaterial>
+      </T.Mesh>
+    </T.Scene>
+  )
+}
+```
+
+### Complex Model Loading
+
+```tsx
+function Model() {
+  return (
+    <Resource loader={GLTFLoader} url="/models/character.glb">
+      {(gltf) => {
+        // Process animations
+        const animations = gltf.animations
+        const mixer = new THREE.AnimationMixer(gltf.scene)
+        
+        // Play first animation
+        if (animations.length > 0) {
+          mixer.clipAction(animations[0]).play()
+        }
+        
+        // Update mixer in animation loop
+        useFrame((_, delta) => mixer.update(delta))
+        
+        return (
+          <Entity 
+            from={gltf.scene} 
+            scale={0.01}
+            castShadow
+            receiveShadow
+          />
+        )
+      }}
+    </Resource>
+  )
+}
+```
+
+### Multiple Textures with Different Settings
+
+```tsx
+function TexturedMesh() {
+  return (
+    <T.Mesh>
+      <T.PlaneGeometry args={[5, 5]} />
+      <T.MeshStandardMaterial>
+        <Resource 
+          loader={TextureLoader} 
+          url="wood-diffuse.jpg" 
+          attach="map"
+          wrapS={THREE.RepeatWrapping}
+          wrapT={THREE.RepeatWrapping}
+          repeat={[2, 2]}
+        />
+        <Resource 
+          loader={TextureLoader} 
+          url="wood-normal.jpg" 
+          attach="normalMap"
+          normalScale={[0.5, 0.5]}
+        />
+        <Resource 
+          loader={TextureLoader} 
+          url="wood-ao.jpg" 
+          attach="aoMap"
+          aoMapIntensity={0.5}
+        />
+      </T.MeshStandardMaterial>
+    </T.Mesh>
+  )
+}
+```
+
+## Integration with Suspense
+
+Resource components work with Solid's Suspense boundaries:
+
+```tsx
+import { Suspense } from "solid-js"
+
+function App() {
+  return (
+    <Canvas>
+      <Suspense fallback={<LoadingSpinner />}>
+        <Resource loader={GLTFLoader} url="heavy-model.glb">
+          {(gltf) => <Entity from={gltf.scene} />}
+        </Resource>
+      </Suspense>
+    </Canvas>
+  )
+}
+```

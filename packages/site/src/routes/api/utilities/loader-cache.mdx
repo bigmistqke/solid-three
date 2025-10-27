@@ -1,0 +1,299 @@
+---
+title: LoaderCache
+---
+
+# LoaderCache
+
+LoaderCache is the default cache manager for `useLoader`. It implements the `LoaderRegistry` interface with additional resource management features including automatic reference counting and deferred disposal.
+
+## Features
+
+- **Automatic Reference Counting**: Tracks if a resource is currently in use
+- **Deferred Disposal**: Resources are added to a free list when no longer referenced
+- **Manual Disposal Methods**: Several methods to manage resource disposal
+  - `dispose(loader, path)`: Dispose a resource based on loader and path
+  - `disposeResource(resource)`: Dispose a resource by passing the resource directly
+  - `disposeFreeList()`: Dispose all currently unreferenced resources
+
+## LoaderRegistry Interface
+
+```typescript
+interface LoaderRegistry {
+  set<TLoader extends Loader<object, any>>(
+    loader: TLoader,
+    url: LoaderUrl<TLoader>,
+    data: PromiseMaybe<LoaderData<TLoader>>,
+  ): void
+
+  get<TLoader extends Loader<object, any>>(
+    loader: Loader<TData, TUrl>,
+    url: LoaderUrl<TLoader>,
+    warn?: boolean,
+  ): PromiseMaybe<LoaderData<TLoader>> | undefined
+}
+```
+
+## Basic Usage
+
+The LoaderCache works automatically with `useLoader`:
+
+```tsx
+const TexturedBox = () => {
+  // This increments the reference count for 'texture.jpg'
+  const texture = useLoader(TextureLoader, "texture.jpg")
+  
+  // When this component unmounts, the reference count decreases
+  // If it reaches zero, the texture is added to the free list
+  return (
+    <T.Mesh>
+      <T.BoxGeometry />
+      <T.MeshBasicMaterial map={texture()} />
+    </T.Mesh>
+  )
+}
+```
+
+## Reference Counting Example
+
+```tsx
+function SharedResourceExample() {
+  const [visible, setVisible] = createSignal(true)
+  
+  return (
+    <Canvas>
+      <Show when={visible()}>
+        <TexturedBox /> {/* ref count: 1 */}
+        <TexturedBox /> {/* ref count: 2 */}
+        <TexturedBox /> {/* ref count: 3 */}
+      </Show>
+      
+      <button onClick={() => {
+        if (visible()) {
+          setVisible(false)
+          
+          // ✅ After components unmount, texture will be added to free list
+          // since reference count reaches zero
+          setTimeout(() => {
+            useLoader.cache.disposeFreeList() // Actually dispose the texture
+          }, 100)
+        } else {
+          setVisible(true)
+        }
+      }}>
+        Toggle Visibility
+      </button>
+    </Canvas>
+  )
+}
+```
+
+## Manual Resource Management
+
+### Dispose Specific Resource
+
+```tsx
+function ManualDisposalExample() {
+  const [textureUrl, setTextureUrl] = createSignal("texture1.jpg")
+  const texture = useLoader(TextureLoader, textureUrl)
+  
+  const switchTexture = () => {
+    // Dispose the current texture before switching
+    useLoader.cache.dispose(TextureLoader, textureUrl())
+    
+    // Switch to new texture
+    setTextureUrl(textureUrl() === "texture1.jpg" ? "texture2.jpg" : "texture1.jpg")
+  }
+  
+  return (
+    <>
+      <T.Mesh>
+        <T.PlaneGeometry />
+        <T.MeshBasicMaterial map={texture()} />
+      </T.Mesh>
+      
+      <button onClick={switchTexture}>
+        Switch Texture
+      </button>
+    </>
+  )
+}
+```
+
+### Dispose by Resource Reference
+
+```tsx
+function DisposeByResourceExample() {
+  const texture = useLoader(TextureLoader, "texture.jpg")
+  
+  const disposeTexture = () => {
+    // Dispose using the actual resource
+    useLoader.cache.disposeResource(texture())
+  }
+  
+  return (
+    <>
+      <T.Mesh>
+        <T.PlaneGeometry />
+        <T.MeshBasicMaterial map={texture()} />
+      </T.Mesh>
+      
+      <button onClick={disposeTexture}>
+        Dispose Texture
+      </button>
+    </>
+  )
+}
+```
+
+### Bulk Disposal
+
+```tsx
+function BulkDisposalExample() {
+  const textures = [
+    useLoader(TextureLoader, "texture1.jpg"),
+    useLoader(TextureLoader, "texture2.jpg"),
+    useLoader(TextureLoader, "texture3.jpg"),
+  ]
+  
+  const disposeAll = () => {
+    // Dispose all unreferenced resources
+    useLoader.cache.disposeFreeList()
+  }
+  
+  return (
+    <>
+      <Index each={textures}>
+        {(texture, i) => (
+          <T.Mesh position={[(i - 1) * 2, 0, 0]}>
+            <T.PlaneGeometry />
+            <T.MeshBasicMaterial map={texture()()} />
+          </T.Mesh>
+        )}
+      </Index>
+      
+      <button onClick={disposeAll}>
+        Dispose Unused Resources
+      </button>
+    </>
+  )
+}
+```
+
+## Custom Cache Implementation
+
+You can create your own cache by implementing the `LoaderRegistry` interface:
+
+```tsx
+class SimpleCache implements LoaderRegistry {
+  private cache = new Map<string, any>()
+  
+  private getKey(loader: any, url: any): string {
+    return `${loader.constructor.name}-${JSON.stringify(url)}`
+  }
+  
+  set(loader: any, url: any, data: any): void {
+    const key = this.getKey(loader, url)
+    this.cache.set(key, data)
+  }
+  
+  get(loader: any, url: any): any {
+    const key = this.getKey(loader, url)
+    return this.cache.get(key)
+  }
+  
+  clear(): void {
+    // Dispose all resources
+    for (const [key, resource] of this.cache) {
+      if (resource && typeof resource.dispose === 'function') {
+        resource.dispose()
+      }
+    }
+    this.cache.clear()
+  }
+}
+
+// Use custom cache globally
+useLoader.cache = new SimpleCache()
+
+// Or use for specific loaders
+const texture = useLoader(
+  TextureLoader, 
+  "texture.jpg", 
+  { cache: new SimpleCache() }
+)
+```
+
+## Memory Management Best Practices
+
+### 1. Regular Cleanup
+
+```tsx
+function App() {
+  onMount(() => {
+    // Clean up unused resources every 30 seconds
+    const interval = setInterval(() => {
+      useLoader.cache.disposeFreeList()
+    }, 30000)
+    
+    onCleanup(() => clearInterval(interval))
+  })
+  
+  return <Canvas>{/* Your scene */}</Canvas>
+}
+```
+
+### 2. Manual Disposal for Large Resources
+
+```tsx
+function LargeModelViewer() {
+  const [modelUrl, setModelUrl] = createSignal(null)
+  const model = createMemo(() => {
+    const url = modelUrl()
+    return url ? useLoader(GLTFLoader, url) : null
+  })
+  
+  const loadModel = (url: string) => {
+    // Dispose previous model if exists
+    const currentUrl = modelUrl()
+    if (currentUrl) {
+      useLoader.cache.dispose(GLTFLoader, currentUrl)
+    }
+    
+    setModelUrl(url)
+  }
+  
+  return (
+    <>
+      <Show when={model()}>
+        <Entity from={model()()?.scene} />
+      </Show>
+      
+      <button onClick={() => loadModel("model1.glb")}>Model 1</button>
+      <button onClick={() => loadModel("model2.glb")}>Model 2</button>
+    </>
+  )
+}
+```
+
+### 3. Cache Configuration
+
+```tsx
+// Disable caching for development
+if (import.meta.env.DEV) {
+  useLoader.cache = undefined
+}
+
+// Or use a limited cache in production
+class LimitedCache extends LoaderCache {
+  private maxSize = 50
+  
+  set(loader: any, url: any, data: any): void {
+    if (this.cache.size >= this.maxSize) {
+      this.disposeFreeList() // Clean up before adding new items
+    }
+    super.set(loader, url, data)
+  }
+}
+
+useLoader.cache = new LimitedCache()
+```

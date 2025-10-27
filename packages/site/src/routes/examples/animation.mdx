@@ -1,0 +1,254 @@
+---
+title: Animation Examples
+---
+
+# Animation Examples
+
+Examples of how to create animations using `useFrame` and solid-three's reactive system.
+
+## Basic Rotation
+
+```tsx
+import { createSignal } from "solid-js"
+import { Canvas, createT, useFrame } from "solid-three"
+import * as THREE from "three"
+
+const T = createT(THREE)
+
+function RotatingCube() {
+  const [rotation, setRotation] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    setRotation(r => r + delta)
+  })
+  
+  return (
+    <T.Mesh rotation-y={rotation()}>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial color="orange" />
+    </T.Mesh>
+  )
+}
+
+export function BasicRotation() {
+  return (
+    <Canvas>
+      <T.AmbientLight intensity={0.5} />
+      <T.DirectionalLight position={[5, 5, 5]} />
+      <RotatingCube />
+    </Canvas>
+  )
+}
+```
+
+## Multiple Animated Objects
+
+```tsx
+function AnimatedScene() {
+  const [time, setTime] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    setTime(t => t + delta)
+  })
+  
+  return (
+    <>
+      {/* Rotating cube */}
+      <T.Mesh 
+        position={[-2, 0, 0]}
+        rotation-x={time()}
+        rotation-y={time() * 0.5}
+      >
+        <T.BoxGeometry />
+        <T.MeshStandardMaterial color="red" />
+      </T.Mesh>
+      
+      {/* Bouncing sphere */}
+      <T.Mesh position={[0, Math.sin(time() * 2), 0]}>
+        <T.SphereGeometry args={[0.5]} />
+        <T.MeshStandardMaterial color="blue" />
+      </T.Mesh>
+      
+      {/* Scaling cylinder */}
+      <T.Mesh 
+        position={[2, 0, 0]}
+        scale={[1, 1 + Math.sin(time() * 3) * 0.5, 1]}
+      >
+        <T.CylinderGeometry args={[0.5, 0.5, 1]} />
+        <T.MeshStandardMaterial color="green" />
+      </T.Mesh>
+    </>
+  )
+}
+```
+
+## Orbital Motion
+
+```tsx
+function OrbitingObjects() {
+  const [angle, setAngle] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    setAngle(a => a + delta * 0.5)
+  })
+  
+  const createOrbit = (radius: number, speed: number, color: string) => {
+    const x = Math.cos(angle() * speed) * radius
+    const z = Math.sin(angle() * speed) * radius
+    
+    return (
+      <T.Mesh position={[x, 0, z]}>
+        <T.SphereGeometry args={[0.2]} />
+        <T.MeshStandardMaterial color={color} />
+      </T.Mesh>
+    )
+  }
+  
+  return (
+    <>
+      {/* Central object */}
+      <T.Mesh>
+        <T.SphereGeometry args={[0.5]} />
+        <T.MeshStandardMaterial color="yellow" />
+      </T.Mesh>
+      
+      {/* Orbiting objects */}
+      {createOrbit(2, 1, "red")}
+      {createOrbit(3, 0.7, "blue")}
+      {createOrbit(4, 0.5, "green")}
+    </>
+  )
+}
+```
+
+## Interactive Animation
+
+```tsx
+function InteractiveAnimation() {
+  const [speed, setSpeed] = createSignal(1)
+  const [paused, setPaused] = createSignal(false)
+  const [rotation, setRotation] = createSignal(0)
+  
+  useFrame((_, delta) => {
+    if (!paused()) {
+      setRotation(r => r + delta * speed())
+    }
+  })
+  
+  return (
+    <>
+      <T.Mesh 
+        rotation-y={rotation()}
+        onClick={() => setPaused(!paused())}
+        onPointerOver={(e) => {
+          e.object.scale.setScalar(1.2)
+        }}
+        onPointerOut={(e) => {
+          e.object.scale.setScalar(1)
+        }}
+      >
+        <T.BoxGeometry />
+        <T.MeshStandardMaterial 
+          color={paused() ? "red" : "green"} 
+        />
+      </T.Mesh>
+      
+      {/* Speed controls */}
+      <T.Group position={[0, -2, 0]}>
+        <T.Mesh 
+          position={[-1, 0, 0]}
+          onClick={() => setSpeed(Math.max(0.1, speed() - 0.2))}
+        >
+          <T.BoxGeometry args={[0.5, 0.5, 0.5]} />
+          <T.MeshBasicMaterial color="blue" />
+        </T.Mesh>
+        
+        <T.Mesh 
+          position={[1, 0, 0]}
+          onClick={() => setSpeed(Math.min(3, speed() + 0.2))}
+        >
+          <T.BoxGeometry args={[0.5, 0.5, 0.5]} />
+          <T.MeshBasicMaterial color="orange" />
+        </T.Mesh>
+      </T.Group>
+    </>
+  )
+}
+```
+
+## Smooth Transitions
+
+```tsx
+function SmoothTransitions() {
+  const [targetPosition, setTargetPosition] = createSignal([0, 0, 0])
+  const [currentPosition, setCurrentPosition] = createSignal([0, 0, 0])
+  
+  useFrame(() => {
+    const target = targetPosition()
+    const current = currentPosition()
+    
+    // Lerp towards target position
+    const newPos = [
+      current[0] + (target[0] - current[0]) * 0.05,
+      current[1] + (target[1] - current[1]) * 0.05,
+      current[2] + (target[2] - current[2]) * 0.05,
+    ]
+    
+    setCurrentPosition(newPos)
+  })
+  
+  const moveToRandomPosition = () => {
+    setTargetPosition([
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+    ])
+  }
+  
+  return (
+    <>
+      <T.Mesh 
+        position={currentPosition()}
+        onClick={moveToRandomPosition}
+      >
+        <T.SphereGeometry args={[0.5]} />
+        <T.MeshStandardMaterial color="purple" />
+      </T.Mesh>
+      
+      {/* Target indicator */}
+      <T.Mesh position={targetPosition()}>
+        <T.SphereGeometry args={[0.1]} />
+        <T.MeshBasicMaterial color="red" wireframe />
+      </T.Mesh>
+    </>
+  )
+}
+```
+
+## Performance Tips
+
+1. **Use signals sparingly**: Don't create a signal for every property that changes
+2. **Batch updates**: Update multiple properties in a single frame callback
+3. **Use ref for direct updates**: For high-frequency updates, modify objects directly
+4. **Control frame priority**: Use priority parameter for critical animations
+
+```tsx
+// Good: Direct object manipulation for high-frequency updates
+function PerformantAnimation() {
+  let meshRef
+  
+  useFrame((_, delta) => {
+    if (meshRef) {
+      meshRef.rotation.y += delta
+      meshRef.position.y = Math.sin(Date.now() * 0.001) * 2
+    }
+  })
+  
+  return (
+    <T.Mesh ref={meshRef}>
+      <T.BoxGeometry />
+      <T.MeshStandardMaterial />
+    </T.Mesh>
+  )
+}
+```
