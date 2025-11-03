@@ -10,8 +10,8 @@ import {
 } from "three"
 import { createThree } from "./create-three.tsx"
 import type { EventRaycaster } from "./raycasters.tsx"
-import { isTestEnvironment, useTestContext } from "./testing/test-provider.tsx"
 import { TestCanvas } from "./testing/index.tsx"
+import { isTestEnvironment, useTestContext } from "./testing/test-provider.tsx"
 import type { CanvasEventHandlers, Context, Props } from "./types.ts"
 import { inBrowser } from "./utils/in-browser.ts"
 
@@ -22,9 +22,11 @@ export interface CanvasProps extends ParentProps<Partial<CanvasEventHandlers>> {
   ref?: Ref<Context>
   class?: string
   /** Configuration for the camera used in the scene. */
-  defaultCamera?: Partial<Props<PerspectiveCamera> | Props<OrthographicCamera>> | Camera
+  defaultCamera?:
+    | Partial<Props<typeof PerspectiveCamera> | Props<typeof OrthographicCamera>>
+    | Camera
   /** Configuration for the Raycaster used for mouse and pointer events. */
-  defaultRaycaster?: Partial<Props<EventRaycaster>> | EventRaycaster | Raycaster
+  defaultRaycaster?: Partial<Props<typeof Raycaster>> | EventRaycaster | Raycaster
   /** Element to render while the main content is loading asynchronously.  */
   fallback?: JSX.Element
   /** Toggles flat interpolation for texture filtering. */
@@ -33,7 +35,7 @@ export interface CanvasProps extends ParentProps<Partial<CanvasEventHandlers>> {
   frameloop?: "never" | "demand" | "always"
   /** Options for the WebGLRenderer or a function returning a customized renderer. */
   gl?:
-    | Partial<Props<WebGLRenderer>>
+    | Partial<Props<typeof WebGLRenderer>>
     | ((canvas: HTMLCanvasElement) => WebGLRenderer)
     | WebGLRenderer
   /** Toggles linear interpolation for texture filtering. */
@@ -41,7 +43,7 @@ export interface CanvasProps extends ParentProps<Partial<CanvasEventHandlers>> {
   /** Toggles between Orthographic and Perspective camera. */
   orthographic?: boolean
   /** Configuration for the Scene instance. */
-  scene?: Partial<Props<Scene>> | Scene
+  scene?: Partial<Props<typeof Scene>> | Scene
   /** Enables and configures shadows in the scene. */
   shadows?: boolean | "basic" | "percentage" | "soft" | "variance" | WebGLRenderer["shadowMap"]
   /** Custom CSS styles for the canvas container. */
