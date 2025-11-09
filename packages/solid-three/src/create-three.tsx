@@ -209,13 +209,12 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
   const gl = createMemo(() => {
     const gl =
       props.gl instanceof WebGLRenderer
-        ? // props.gl can be a WebGLRenderer provided by the user
-          props.gl
+        ? props.gl
         : typeof props.gl === "function"
-        ? // or a callback that returns a Renderer
-          props.gl(canvas)
-        : // if props.gl is not defined we default to a WebGLRenderer
-          new WebGLRenderer({ canvas, alpha: true })
+        ? props.gl(canvas)
+        : props.gl?.args
+        ? new WebGLRenderer({ canvas, ...props.gl.args[0] })
+        : new WebGLRenderer({ canvas, alpha: true })
 
     return meta(gl, {
       get props() {
@@ -364,7 +363,7 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
         },
       })
 
-      // Manage props
+      // // Manage props
       if (props.gl && !(props.gl instanceof WebGLRenderer)) {
         useProps(gl, props.gl)
       }
