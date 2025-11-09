@@ -1,7 +1,6 @@
 import { createEffect, createMemo, createSignal, Show, type ParentProps, type Ref } from "solid-js"
-import { Canvas, createT, Entity, useFrame } from "solid-three"
+import { Canvas, createT, Entity, useFrame, useThree, type Meta } from "solid-three"
 import * as THREE from "three"
-import type { Meta } from "../../../../src/types.ts"
 import { OrbitControls } from "../controls/orbit-controls.tsx"
 
 const T = createT(THREE)
@@ -129,6 +128,14 @@ export default function () {
       <OrbitControls />
       <T.AmbientLight intensity={0.2} />
       <T.PointLight position={[0, 0, 0]} intensity={2} />
+      <T.PerspectiveCamera
+        manual
+        position={new THREE.Vector3(0, 0, 30)}
+        ref={element => {
+          const three = useThree()
+          setTimeout(() => three.setCamera(element), 1000)
+        }}
+      />
       <T.Group rotation={[0, 0, Math.PI / 2]}>
         <CelestialBody name="sun" radius={1.5} color="#FDB813">
           <CelestialBody name="earth" radius={0.5} color="#1E90FF" orbit={[8, 6]}>

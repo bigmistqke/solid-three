@@ -1,21 +1,27 @@
 import { whenEffect } from "@bigmistqke/solid-whenever"
 import { createEffect, createMemo, onCleanup, type Ref } from "solid-js"
-import { useFrame, useThree, type S3 } from "solid-three"
+import {
+  useFrame,
+  useProps,
+  useThree,
+  type CameraKind,
+  type Props,
+  type Vector3,
+} from "solid-three"
 import type { Event } from "three"
 import { OrbitControls as ThreeOrbitControls } from "three-stdlib"
-import { useProps } from "../../../src/props.ts"
 import { processProps } from "./process-props.ts"
 
-export interface OrbitControlsProps extends S3.Props<typeof ThreeOrbitControls> {
+export interface OrbitControlsProps extends Props<typeof ThreeOrbitControls> {
   ref?: Ref<ThreeOrbitControls>
-  camera?: S3.CameraKind
+  camera?: CameraKind
   domElement?: HTMLElement
   enableDamping?: boolean
   onChange?: (e?: Event<"change", ThreeOrbitControls>) => void
   onEnd?: (e?: Event<"end", ThreeOrbitControls>) => void
   onStart?: (e?: Event<"start", ThreeOrbitControls>) => void
   regress?: boolean
-  target?: S3.Vector3
+  target?: Vector3
   keyEvents?: boolean | HTMLElement
 }
 

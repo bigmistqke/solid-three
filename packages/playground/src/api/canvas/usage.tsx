@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js"
-import { Canvas, createT } from "solid-three"
+import { Canvas, createT, useFrame } from "solid-three"
 import * as THREE from "three"
 
 const T = createT(THREE)
@@ -59,24 +59,21 @@ export default function () {
 
       <Canvas
         camera={{
-          position: orthographic() ? [5, 5, 5] : [0, 0, 5],
+          position: orthographic() ? [2, 2, 2] : [0, 0, 2],
           fov: 75,
         }}
         fallback={<div style={{ color: "white", padding: "20px" }}>Loading Canvas...</div>}
         gl={{
-          antialias: true,
-          alpha: true,
-          powerPreference: "high-performance",
+          args: [
+            {
+              antialias: true,
+              alpha: true,
+              powerPreference: "high-performance",
+            },
+          ],
         }}
         scene={{
-          background: new THREE.Color(0x202020),
           fog: new THREE.Fog(0x202020, 10, 50),
-        }}
-        raycaster={{
-          params: {
-            Line: { threshold: 0.1 },
-            Points: { threshold: 0.1 },
-          },
         }}
         shadows={shadows()}
         orthographic={orthographic()}
@@ -101,10 +98,16 @@ export default function () {
         />
 
         <T.Mesh
-          position={[-2, 0, 0]}
+          position={[0, 0, 0]}
+          rotation={[0.5, 0.5, 0.5]}
           castShadow={!!shadows()}
           receiveShadow={!!shadows()}
           onClick={() => console.info("Red cube clicked!")}
+          ref={element => {
+            useFrame(() => {
+              element.rotateY(-0.002)
+            })
+          }}
         >
           <T.BoxGeometry args={[1, 1, 1]} />
           <T.MeshStandardMaterial color="red" />
