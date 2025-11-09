@@ -1,4 +1,4 @@
-import { type Accessor, type Setter, createSignal, getOwner, onCleanup, untrack } from "solid-js"
+import { type Accessor, type Setter, createSignal, getOwner, onCleanup } from "solid-js"
 
 /** Class representing a stack data structure. */
 export class Stack<T = any> {
@@ -28,45 +28,36 @@ export class Stack<T = any> {
   /**
    * Adds a value `T` or `Accessor<T>` to the stack.
    * Value is automatically removed from stack on cleanup.
-   * @param value - The value to add to the stack.
+   * @param item - The value to add to the stack.
    * @returns A cleanup function to remove the value from the stack.
    */
-  push(value: T | Accessor<T>) {
+  push(item: T | Accessor<T>) {
     this.#setArray(array => {
-      const index = array.indexOf(value)
+      const index = array.indexOf(item)
       if (index !== -1) array.splice(index, 1)
-      array.push(value)
+      array.push(item)
       return array
     })
-    // @ts-expect-error TODO: fix type-error
-    if (import.meta.env?.MODE === "development") {
-      const array = untrack(this.#array.bind(this))
-      if (array.length > 2) {
-        // TODO: write better warning message
-        console.warn(
-          `Stack ${this.name} has more then 2 entries:`,
-          array,
-          `This could lead to unexpected behavior: only the latest added value will be selected.`,
-        )
-      }
-      if (getOwner() === null) {
-        console.warn(
-          `Value ${value} is added to stack ${this.name} outside a \`createRoot\` or \`render\`.
-Remember to remove the element from the stack by calling the returned cleanup-function manually.`,
-        )
-      }
+    if (getOwner() === null) {
+      console.warn(
+        `An item is added to ${this.name}-stack outside a \`createRoot\` or \`render\`.
+  Remember to remove the item manually by calling the returned disposal-function.`,
+        { item },
+      )
+    } else {
+      onCleanup(() => this.remove(item))
     }
-    onCleanup(() => this.remove(value))
-    return () => this.remove(value)
+
+    return () => this.remove(item)
   }
   /**
    * Removes a value from the stack.
    * @private
-   * @param value - The value to remove from the stack.
+   * @param item - The value to remove from the stack.
    */
-  remove(value: T | Accessor<T>) {
+  remove(item: T | Accessor<T>) {
     this.#setArray(array => {
-      const index = array.indexOf(value)
+      const index = array.indexOf(item)
       if (index === -1) return array
       array.splice(index, 1)
       return array

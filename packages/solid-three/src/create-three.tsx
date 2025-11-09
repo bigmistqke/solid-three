@@ -37,6 +37,7 @@ import {
   getCurrentViewport,
   meta,
   removeElementFromArray,
+  updateCameraAspect,
   useRef,
   withMultiContexts,
 } from "./utils.ts"
@@ -169,13 +170,14 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
   /*                                                                                */
   /**********************************************************************************/
 
-  const camera = createMemo(() =>
+  const defaultCamera = createMemo(() =>
     meta(
       props.camera instanceof Camera
         ? (props.camera as OrthographicCamera | PerspectiveCamera)
         : props.orthographic
-        ? new OrthographicCamera()
-        : new PerspectiveCamera(),
+        ? new OrthographicCamera(...(props.camera?.args ?? []))
+        : // @ts-expect-error
+          new PerspectiveCamera(...(props.camera?.args ?? [])),
       {
         get props() {
           return props.camera || {}
@@ -193,9 +195,11 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
     }),
   )
 
-  const raycaster = createMemo(() =>
+  const defaultRaycaster = createMemo(() =>
     meta<Raycaster | EventRaycaster>(
-      props.raycaster instanceof Raycaster ? props.raycaster : new CursorRaycaster(),
+      props.raycaster instanceof Raycaster
+        ? props.raycaster
+        : new CursorRaycaster(...(props.raycaster?.args ?? [])),
       {
         get props() {
           return props.raycaster || {}
@@ -212,9 +216,13 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
         ? props.gl
         : typeof props.gl === "function"
         ? props.gl(canvas)
-        : props.gl?.args
-        ? new WebGLRenderer({ canvas, ...props.gl.args[0] })
-        : new WebGLRenderer({ canvas, alpha: true })
+        : new WebGLRenderer({
+            canvas,
+            powerPreference: "high-performance",
+            antialias: true,
+            alpha: true,
+            ...props.gl?.args?.[0],
+          })
 
     return meta(gl, {
       get props() {
@@ -224,10 +232,12 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
   })
 
   const measure = useMeasure()
-  measure.setElement(canvas)
+  measure.setElement(canvas.parentElement)
 
   const defaultTarget = new Vector3()
-  const viewport = createMemo(() => getCurrentViewport(camera(), defaultTarget, measure.bounds()))
+  const viewport = createMemo(() =>
+    getCurrentViewport(defaultCamera(), defaultTarget, measure.bounds()),
+  )
 
   const clock = new Clock()
   clock.start()
@@ -250,7 +260,7 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
     xr,
     // elements
     get camera() {
-      return cameraStack.peek() ?? camera()
+      return cameraStack.peek() ?? defaultCamera()
     },
     setCamera(camera: CameraKind) {
       return cameraStack.push(camera)
@@ -259,7 +269,7 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
       return scene()
     },
     get raycaster() {
-      return raycasterStack.peek() || raycaster()
+      return raycasterStack.peek() || defaultRaycaster()
     },
     setRaycaster(raycaster: Raycaster) {
       return raycasterStack.push(raycaster)
@@ -279,7 +289,7 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
 
   /**********************************************************************************/
   /*                                                                                */
-  /*                                     Effects                                    */
+  /*                                  Side-Effects                                  */
   /*                                                                                */
   /**********************************************************************************/
 
@@ -293,29 +303,29 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
       }
     })
 
-    // Manage camera
+    /* Default Camera Side-Effects */
     createRenderEffect(() => {
       if (cameraStack.peek()) return
       if (!props.camera || props.camera instanceof Camera) return
-      useProps(camera, props.camera)
+      useProps(defaultCamera, props.camera)
       // NOTE:  Manually update camera's matrix with updateMatrixWorld is needed.
       //        Otherwise casting a ray immediately after start-up will cause the incorrect matrix to be used.
-      camera().updateMatrixWorld(true)
+      defaultCamera().updateMatrixWorld(true)
     })
 
-    // Manage scene
+    /* Scene Side-Effects */
     createRenderEffect(() => {
       if (!props.scene || props.scene instanceof Scene) return
       useProps(scene, props.scene)
     })
 
-    // Manage raycaster
+    /* Raycaster Side-Effects */
     createRenderEffect(() => {
       if (!props.raycaster || props.raycaster instanceof Raycaster) return
-      useProps(raycaster, props.raycaster)
+      useProps(defaultRaycaster, props.raycaster)
     })
 
-    // Manage gl
+    /* Gl Side-Effects */
     createRenderEffect(() => {
       // Set shadow-map
       createRenderEffect(() => {
@@ -353,6 +363,7 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
       // Set color space and tonemapping preferences
       const LinearEncoding = 3000
       const sRGBEncoding = 3001
+
       // Color management and tone-mapping
       useProps(gl, {
         get outputEncoding() {
@@ -363,10 +374,19 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
         },
       })
 
-      // // Manage props
+      // Manage props
       if (props.gl && !(props.gl instanceof WebGLRenderer)) {
         useProps(gl, props.gl)
       }
+    })
+
+    /* Bounds Side-Effects: Handle aspect ratio of WebGLRenderer and the current camera */
+    createRenderEffect(() => {
+      const bounds = measure.bounds()
+      context.gl.setSize(bounds.width, bounds.height)
+      context.gl.setPixelRatio(globalThis.devicePixelRatio)
+      createRenderEffect(() => updateCameraAspect(context.camera, bounds))
+      context.render(performance.now())
     })
   }, [[threeContext, context]])
 

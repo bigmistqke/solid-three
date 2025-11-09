@@ -170,7 +170,7 @@ export interface Viewport {
 }
 
 /** Possible camera types. */
-export type CameraKind = PerspectiveCamera | OrthographicCamera
+export type CameraKind = (PerspectiveCamera | OrthographicCamera) & { manual?: boolean }
 
 export type FrameListenerCallback = (context: Context, delta: number, frame?: XRFrame) => void
 export type FrameListenerOptions = { priority?: number; stage?: "before" | "after" }
@@ -319,6 +319,7 @@ export type Props<T> = Partial<
          * Object3D can still receive events via propagation from its descendants.
          */
         raycastable: boolean
+        manual: T extends typeof PerspectiveCamera | typeof OrthographicCamera ? boolean : never
       },
     ]
   >

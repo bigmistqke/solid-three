@@ -1,4 +1,3 @@
-import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { onMount, type JSX, type ParentProps, type Ref } from "solid-js"
 import {
   Camera,
@@ -68,31 +67,11 @@ export function Canvas(props: ParentProps<CanvasProps>) {
 
   onMount(() => {
     const context = createThree(canvas, props)
-
     // If we're in a test environment, pass the context to the TestProvider
     if (isTestEnvironment()) {
       const testContext = useTestContext()
       testContext.setThree(context)
     }
-
-    // Resize observer for the canvas to adjust camera and renderer on size change
-    createResizeObserver(container, function onResize() {
-      const { width, height } = container.getBoundingClientRect()
-      context.gl.setSize(width, height)
-      context.gl.setPixelRatio(globalThis.devicePixelRatio)
-
-      if (context.camera instanceof OrthographicCamera) {
-        context.camera.left = width / -2
-        context.camera.right = width / 2
-        context.camera.top = height / 2
-        context.camera.bottom = height / -2
-      } else {
-        context.camera.aspect = width / height
-      }
-
-      context.camera.updateProjectionMatrix()
-      context.render(performance.now())
-    })
   })
 
   return (

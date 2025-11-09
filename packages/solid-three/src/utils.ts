@@ -223,7 +223,7 @@ export const removeElementFromArray = (array: any[], value: any) => {
 
 /**********************************************************************************/
 /*                                                                                */
-/*                                     Resolve                                    */
+/*                                      Resolve                                   */
 /*                                                                                */
 /**********************************************************************************/
 
@@ -452,4 +452,22 @@ export function binarySearch(array: number[], target: number) {
   }
 
   return left // Insertion point
+}
+
+// We copy the pattern from react-three-fiber where we bail out of automatic aspect-ratio when .manual is set to true.
+// see https://github.com/pmndrs/react-three-fiber/blob/9ca52648e9dbf595b9bf71ed1f63db55f8a20506/packages/fiber/src/core/utils.tsx#L533
+export function updateCameraAspect(
+  camera: CameraKind,
+  { width, height }: { width: number; height: number },
+) {
+  if (camera.manual) return
+  if (camera instanceof OrthographicCamera) {
+    camera.left = width / -2
+    camera.right = width / 2
+    camera.top = height / 2
+    camera.bottom = height / -2
+  } else {
+    camera.aspect = width / height
+  }
+  camera.updateProjectionMatrix()
 }
