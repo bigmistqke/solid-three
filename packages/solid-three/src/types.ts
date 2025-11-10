@@ -22,7 +22,6 @@ import type {
 import type { CanvasProps } from "./canvas.tsx"
 import type { $S3C } from "./constants.ts"
 import type { EventRaycaster } from "./raycasters.tsx"
-import type { Intersect } from "./utils/type-utils.ts"
 import type { Measure } from "./utils/use-measure.ts"
 
 /**********************************************************************************/
@@ -33,6 +32,7 @@ import type { Measure } from "./utils/use-measure.ts"
 
 export type AccessorMaybe<T> = T | Accessor<T>
 export type PromiseMaybe<T> = T | Promise<T>
+export type ConstructorMaybe<T> = T | Constructor<T>
 
 export type ClassInstance<T extends object> = T & { constructor: Function }
 
@@ -40,15 +40,7 @@ export type ClassInstance<T extends object> = T & { constructor: Function }
 export type Constructor<T = any> = new (...args: any[]) => T
 
 /** Extracts the instance from a constructor. */
-export type InstanceOf<T> = T extends Constructor<infer TObject> ? TObject : T
-
-export type Overwrite<T extends unknown[]> = T extends [infer First, ...infer Rest]
-  ? Rest extends []
-    ? First
-    : Overwrite<Rest> extends infer Result
-    ? Omit<First, keyof Result> & Result
-    : never
-  : never
+export type InstanceOf<T> = T extends Constructor<infer U> ? U : T
 
 export type Prettify<T> = {
   [K in keyof T]: T[K]
@@ -133,6 +125,51 @@ export type LoaderUrl<T extends Loader<object, any>> = T extends Loader<object, 
   : never
 
 /**********************************************************************************/
+/*                                                                                */
+/*                        Higher Kinded Type (HKT) Utilities                      */
+/*                                                                                */
+/**********************************************************************************/
+
+// See https://www.matechs.com/blog/encoding-hkts-in-typescript-once-again
+interface HKT<T extends unknown = unknown> {
+  in: T
+  out: unknown
+}
+
+type Apply<THKT extends HKT, TValue extends THKT["in"]> = Prettify<(THKT & { in: TValue })["out"]>
+
+type Reduce<
+  THKT extends HKT<[unknown, unknown]>,
+  TValue extends THKT["in"][number][],
+> = TValue extends [infer First, ...infer Rest]
+  ? First extends never
+    ? Reduce<THKT, Rest>
+    : Rest extends readonly []
+    ? First
+    : Reduce<THKT, Rest> extends infer Result
+    ? Result extends never
+      ? First
+      : Apply<THKT, [First, Result]>
+    : never
+  : never
+
+interface OverwriteRecordHKT extends HKT<[unknown, unknown]> {
+  out: Omit<this["in"][0], keyof this["in"][1]> & this["in"][1]
+}
+interface IntersectRecordHKT extends HKT<[unknown, unknown]> {
+  out: {
+    [TKey in keyof this["in"][0] | keyof this["in"][1]]: unknown extends this["in"][1][TKey]
+      ? this["in"][0][TKey]
+      : unknown extends this["in"][0][TKey]
+      ? this["in"][1][TKey]
+      : this["in"][0][TKey] | this["in"][1][TKey]
+  }
+}
+
+export type OverwriteRecord<T extends unknown[]> = Reduce<OverwriteRecordHKT, T>
+export type IntersectRecord<T extends unknown[]> = Reduce<IntersectRecordHKT, T>
+
+/**********************************************************************************/
 /*                                                s                                */
 /*                                     Context                                    */
 /*                                                                                */
@@ -193,7 +230,7 @@ export type ThreeEvent<
     stoppable: true
     intersections: true
   },
-> = Intersect<
+> = IntersectRecord<
   [
     { nativeEvent: TEvent },
     When<
@@ -303,24 +340,36 @@ export type MapToRepresentation<T> = {
 
 /** Generic `solid-three` props of a given class. */
 export type Props<T> = Partial<
-  Overwrite<
+  IntersectRecord<
     [
-      MapToRepresentation<InstanceOf<T>>,
-      EventHandlers,
-      {
-        args: T extends Constructor ? ConstructorOverloadParameters<T> : undefined
-        attach: string | ((parent: object, self: Meta<InstanceOf<T>>) => () => void)
-        children: JSX.Element
-        key?: string
-        onUpdate: (self: Meta<InstanceOf<T>>) => void
-        ref: InstanceOf<T> | ((value: Meta<InstanceOf<T>>) => void)
-        /**
-         * Prevents the Object3D from being cast by the ray.
-         * Object3D can still receive events via propagation from its descendants.
-         */
-        raycastable: boolean
-        manual: T extends typeof PerspectiveCamera | typeof OrthographicCamera ? boolean : never
-      },
+      T extends ConstructorMaybe<PerspectiveCamera> | ConstructorMaybe<OrthographicCamera>
+        ? {
+            /** Bail out of automatic aspect-ratio */
+            manual?: boolean
+          }
+        : never,
+      OverwriteRecord<
+        [
+          MapToRepresentation<InstanceOf<T>>,
+          EventHandlers,
+          {
+            args: T extends Constructor ? ConstructorOverloadParameters<T> : undefined
+            attach: string | ((parent: object, self: Meta<InstanceOf<T>>) => () => void)
+            children: JSX.Element
+            key?: string
+            onUpdate: (self: Meta<InstanceOf<T>>) => void
+            ref: InstanceOf<T> | ((value: Meta<InstanceOf<T>>) => void)
+            /**
+             * Prevents the Object3D from being cast by the ray.
+             * Object3D can still receive events via propagation from its descendants.
+             */
+            raycastable: boolean
+            manual: T extends InstanceOf<typeof PerspectiveCamera | typeof OrthographicCamera>
+              ? boolean
+              : never
+          },
+        ]
+      >,
     ]
   >
 >

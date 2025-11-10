@@ -17,7 +17,7 @@ import type {
   LoaderData,
   LoaderUrl,
   Meta,
-  Overwrite,
+  OverwriteRecord,
   Prettify,
   Props,
 } from "./types.ts"
@@ -81,7 +81,7 @@ export function Portal<T extends Object3D>(props: PortalProps<T>) {
 /*                                                                                */
 /**********************************************************************************/
 
-type EntityProps<T extends object | Constructor<object>> = Overwrite<
+type EntityProps<T extends object | Constructor<object>> = OverwriteRecord<
   [
     Props<T>,
     {
