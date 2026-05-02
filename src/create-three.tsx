@@ -1,4 +1,4 @@
-import { children, createMemo, createRenderEffect, createRoot, merge, onCleanup } from "solid-js"
+import { children, createMemo, createRenderEffect, createRoot, merge, onCleanup, useContext } from "solid-js"
 import { setContext } from "@solidjs/signals"
 import {
   ACESFilmicToneMapping,
@@ -20,7 +20,7 @@ import type { CanvasProps } from "./canvas.tsx"
 import { SHOULD_DEBUG } from "./constants.ts"
 import { createEvents } from "./create-events.ts"
 import { Stack } from "./data-structure/stack.ts"
-import { frameContext, threeContext } from "./hooks.ts"
+import { FrameContext, ThreeContext } from "./hooks.ts"
 import { eventContext } from "./internal-context.ts"
 import { useProps, useSceneGraph } from "./props.ts"
 import { CursorRaycaster, type EventRaycaster } from "./raycasters.tsx"
@@ -323,8 +323,8 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
   }
   debug("context ready", () => ({ contextKeys: Object.keys(context) }))
 
-  setContext(threeContext, context)
-  setContext(frameContext, addFrameListener)
+  useContext(ThreeContext).ref = context;
+  useContext(FrameContext).ref = addFrameListener;
   useRef(props, context)
 
   /**********************************************************************************/
@@ -546,12 +546,10 @@ export function createThree(canvas: HTMLCanvasElement, props: CanvasProps) {
   /**********************************************************************************/
 
   const EventContext = eventContext
-  const FrameContext = frameContext
-  const ThreeContext = threeContext
   const c = children(() => (
     <EventContext value={addEventListener}>
-      <FrameContext value={addFrameListener}>
-        <ThreeContext value={context}>{canvasProps.children}</ThreeContext>
+      <FrameContext value={{ ref: addFrameListener, }}>
+        <ThreeContext value={{ ref: context, }}>{canvasProps.children}</ThreeContext>
       </FrameContext>
     </EventContext>
   ))

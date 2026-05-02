@@ -17,8 +17,9 @@ import {
 import { SHOULD_DEBUG } from "./constants.ts"
 import { createThree } from "./create-three.tsx"
 import type { EventRaycaster } from "./raycasters.tsx"
-import type { CanvasEventHandlers, Context, Props } from "./types.ts"
+import type { CanvasEventHandlers, Context, FrameListener, Props } from "./types.ts"
 import { createDebug, createResizeObserver, describeOwnerChain } from "./utils.ts"
+import { FrameContext, ThreeContext } from "./hooks.ts"
 
 const debug = createDebug("canvas:Canvas", SHOULD_DEBUG)
 
@@ -72,56 +73,72 @@ export function Canvas(props: ParentProps<CanvasProps>) {
   let canvas: HTMLCanvasElement = null!
   let container: HTMLDivElement = null!
 
-  createEffect(
-    () => {},
-    () => {
-      runWithOwner(owner, () => {
-        const context = createThree(canvas, props)
+  let threeContextValue: { ref: Context | undefined, } = {
+    ref: undefined,
+  };
+  let frameContextValue: { ref: FrameListener | undefined, } = {
+    ref: undefined,
+  };
 
-        createResizeObserver(container, function onResize() {
-          const { width, height } = container.getBoundingClientRect()
-          const cameraKind =
-            context.camera instanceof OrthographicCamera ? "orthographic" : "perspective"
-          debug("resize", () => ({ width, height, camera: cameraKind }))
+  let Inside = () => {
+    createEffect(
+      () => {},
+      () => {
+        runWithOwner(owner, () => {
+          const context = createThree(canvas, props)
 
-          context.gl.setSize(width, height)
-          context.gl.setPixelRatio(globalThis.devicePixelRatio)
+          createResizeObserver(container, function onResize() {
+            const { width, height } = container.getBoundingClientRect()
+            const cameraKind =
+              context.camera instanceof OrthographicCamera ? "orthographic" : "perspective"
+            debug("resize", () => ({ width, height, camera: cameraKind }))
 
-          if (context.camera instanceof OrthographicCamera) {
-            debug("resize", () => ({ camera: "orthographic", width, height }))
+            context.gl.setSize(width, height)
+            context.gl.setPixelRatio(globalThis.devicePixelRatio)
 
-            context.camera.left = width / -2
-            context.camera.right = width / 2
-            context.camera.top = height / 2
-            context.camera.bottom = height / -2
-          } else {
-            debug("resize", () => ({ camera: "perspective", aspect: width / height }))
+            if (context.camera instanceof OrthographicCamera) {
+              debug("resize", () => ({ camera: "orthographic", width, height }))
 
-            context.camera.aspect = width / height
-          }
+              context.camera.left = width / -2
+              context.camera.right = width / 2
+              context.camera.top = height / 2
+              context.camera.bottom = height / -2
+            } else {
+              debug("resize", () => ({ camera: "perspective", aspect: width / height }))
 
-          context.camera.updateProjectionMatrix()
-          context.render(performance.now())
+              context.camera.aspect = width / height
+            }
+
+            context.camera.updateProjectionMatrix()
+            context.render(performance.now())
+          })
         })
-      })
-    },
-  )
+      },
+    )
+    return (<></>);
+  };
+
 
   return (
-    <div
-      ref={container}
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-        contain: "strict",
-        display: "flex",
-        ...props.style,
-      }}
-      class={props.class}
-    >
-      <canvas ref={canvas} />
-    </div>
+    <ThreeContext value={threeContextValue}>
+      <FrameContext value={frameContextValue}>
+        <Inside/>
+        <div
+          ref={container}
+          style={{
+            position: "relative",
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            contain: "strict",
+            display: "flex",
+            ...props.style,
+          }}
+          class={props.class}
+        >
+          <canvas ref={canvas} />
+        </div>
+      </FrameContext>
+    </ThreeContext>
   )
 }

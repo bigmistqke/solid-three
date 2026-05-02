@@ -13,7 +13,7 @@ import {
 import { setContext } from "@solidjs/signals"
 import { Loader, Object3D } from "three"
 import { SHOULD_DEBUG } from "./constants.ts"
-import { threeContext, useLoader, useThree, type UseLoaderOptions } from "./hooks.ts"
+import { ThreeContext, useLoader, useThree, type UseLoaderOptions } from "./hooks.ts"
 import { useProps, useSceneGraph } from "./props.ts"
 import type { Constructor, LoaderData, LoaderUrl, Meta, Overwrite, Props } from "./types.ts"
 import { type InstanceOf } from "./types.ts"
@@ -66,7 +66,7 @@ export function Portal<T extends Object3D>(props: PortalProps<T>) {
     return meta(props.element, { props: {} })
   })
 
-  setContext(threeContext as any, merge(context, { get scene() { return element() } }))
+  setContext(ThreeContext as any, merge(context, { get scene() { return element() } }))
 
   useProps(element, {
     get onUpdate() {

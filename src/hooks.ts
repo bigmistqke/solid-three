@@ -32,7 +32,7 @@ const debugResolveUrls = createDebug("hooks:resolveUrls", SHOULD_DEBUG)
 /*                                                                                */
 /**********************************************************************************/
 
-export const frameContext = createContext<FrameListener>()
+export const FrameContext = createContext<{ ref: FrameListener | undefined, }>({ ref: undefined, })
 
 /**
  * Hook to register a callback that will be executed on each animation frame within the `<Canvas/>` component.
@@ -42,7 +42,7 @@ export const frameContext = createContext<FrameListener>()
  * @throws Throws an error if used outside of the Canvas component context.
  */
 export const useFrame: FrameListener = (callback, options) => {
-  const addFrameListener = useContext(frameContext)
+  const addFrameListener = useContext(FrameContext)?.ref
   if (!addFrameListener) {
     debugUseFrame("failed", () => ({ reason: "no frame context" }))
     throw new Error("S3: Hooks can only be used within the Canvas component!")
@@ -57,7 +57,7 @@ export const useFrame: FrameListener = (callback, options) => {
 /*                                                                                */
 /**********************************************************************************/
 
-export const threeContext = createContext<Context>(null!)
+export const ThreeContext = createContext<{ ref: Context | undefined }>({ ref: undefined, })
 
 /**
  * Custom hook to access all necessary Three.js objects needed to manage a 3D scene.
@@ -77,7 +77,7 @@ export function useThree(callback?: (value: Context) => any) {
 
     return (callback ? () => undefined : undefined) as any
   }
-  const store = useContext(threeContext)
+  const store = useContext(ThreeContext)?.ref
   if (!store) {
     debugUseThree(
       "failed",
