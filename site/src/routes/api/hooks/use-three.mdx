@@ -49,6 +49,28 @@ The camera and raycaster are each managed as a **stack**. The `camera` and `rayc
 
 `setCamera` and `setRaycaster` push a new one onto the stack, making it active, and return a cleanup that pops it back off — restoring the previous one. Pair the cleanup with `onCleanup` so the previous camera or raycaster comes back when your component unmounts.
 
+### WebXR
+
+solid-three does not manage XR sessions for you — entering and exiting a session is the consumer's job. For almost all cases, reach for [`createXR`](/api/hooks/create-xr), which handles the ordering rules (install the render loop before the session starts, request the session inside the user gesture, release the loop on exit) so you don't have to.
+
+If you need to drive the renderer directly instead, the rule to remember is: install the render callback **before** `setSession` runs.
+
+```tsx
+const { gl, render } = useThree()
+
+// enter XR
+gl.setAnimationLoop(render) // must be set before setSession
+gl.xr.enabled = true
+const session = await navigator.xr.requestSession("immersive-vr")
+await gl.xr.setSession(session)
+
+// exit XR
+gl.setAnimationLoop(null)
+gl.xr.enabled = false
+```
+
+While a session is presenting, the renderer's own loop (driven by the headset) owns rendering, so solid-three's window loop steps aside automatically. The same code works for both `WebGLRenderer` and `WebGPURenderer`. For XR with `WebGPURenderer` on three ≤ r184, construct it with `{ forceWebGL: true }` (the WebGPU backend's XR support is unreleased as of r184).
+
 ## Examples
 
 Switching to an orthographic camera while a signal is set, and restoring the previous one on cleanup:
