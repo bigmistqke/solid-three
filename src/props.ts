@@ -10,10 +10,7 @@ import {
   untrack,
 } from "solid-js"
 import {
-  type BufferGeometry,
   Color,
-  type Fog,
-  type Material,
   type Object3D,
   RGBAFormat,
   Texture,
@@ -166,7 +163,7 @@ export const useSceneGraph = <T extends object>(
     // Reorder: walk parent.children, assign desired order at managed slots
     let childArrayIndex = 0
     for (let i = 0; i < parent.children.length; i++) {
-      if (!managedChildren.has(parent.children[i]!)) {
+      if (!managedChildren.has(parent.children[i])) {
         continue
       }
       while (childArrayIndex < childArray.length) {
@@ -223,6 +220,9 @@ function applyProp<T extends Record<string, any>>(
     return
   }
 
+  // `source` is typed non-null, but the nested-path recursion below passes
+  // `source[property]` (typed `any`) which is `undefined` for a missing path.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!source) {
     console.error("error while applying prop", source, type, value)
     return
@@ -320,7 +320,7 @@ function applyProp<T extends Record<string, any>>(
           const texture = source[type] as Texture
 
           if (hasColorSpace(texture) && hasColorSpace(context.gl)) {
-            texture.colorSpace = context.gl.outputColorSpace as typeof texture.colorSpace
+            texture.colorSpace = context.gl.outputColorSpace
           } else {
             // @ts-expect-error TODO: fix type-error
             texture.encoding = context.gl.outputEncoding

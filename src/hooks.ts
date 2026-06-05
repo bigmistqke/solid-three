@@ -193,7 +193,7 @@ export function useLoader<
   const loader = createMemo(() => {
     const _constructor = resolve(constructor)
 
-    let loader = LOADER_CACHE.get(_constructor) as TLoader
+    let loader = LOADER_CACHE.get(_constructor) as TLoader | undefined
 
     if (!loader) {
       LOADER_CACHE.set(_constructor, (loader = new _constructor()))
@@ -239,6 +239,9 @@ export function useLoader<
     url: TInput,
   ): PromiseMaybe<LoadOutput<TLoader, TInput>> {
     if (config.cache === true) {
+      // `useLoader.cache` is typed non-null (assigned a LoaderCache at load), but
+      // users may null it at runtime to disable global caching (documented).
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!useLoader.cache) {
         return load(loader(), url)
       }

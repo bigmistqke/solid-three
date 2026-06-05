@@ -94,7 +94,7 @@ export function meta<T>(instance: T, augmentation = { props: {} }) {
   _instance[$S3C] = mergeProps(
     { children: new Set(), parent: undefined },
     augmentation,
-  ) as Data<T>
+  )
   return _instance
 }
 
@@ -281,7 +281,7 @@ export function isRenderer(value: unknown): value is Renderer {
  * field we set; WebGPURenderer's `shadowMap` is `{ enabled, type }` without it.
  */
 export function isWebGLShadowMap(value: unknown): value is WebGLShadowMap {
-  return !!value && "needsUpdate" in (value as object)
+  return !!value && typeof value === "object" && "needsUpdate" in value
 }
 
 /**
