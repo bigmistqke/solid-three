@@ -60,6 +60,47 @@ describe("XRControllerSource", () => {
     disconnect()
   })
 
+  it("routes selectend to the originally-grabbed mesh after the controller drifts off it (grab and hold)", () => {
+    // dispatch reuses one mutable event and clears `element` in its canvas-level
+    // phase, so snapshot `element` INSIDE the handler (see the squeeze test above).
+    let endElement: unknown
+    const end = vi.fn((event: any) => (endElement = event.element))
+    const mesh = meta(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial()), {
+      props: {
+        onXRSelectStart: (event: any) => event.setPointerCapture(),
+        onXRSelectEnd: end,
+      },
+    }) as unknown as THREE.Object3D
+    mesh.updateMatrixWorld()
+
+    const controller = new THREE.Object3D()
+    controller.position.set(0.5, 0.3, 5) // aimed at the mesh
+    controller.updateMatrixWorld()
+    const xr = makeFakeXR(index => (index === 0 ? controller : new THREE.Object3D()))
+    const context = {
+      gl: { xr },
+      eventRegistry: [mesh],
+      props: {},
+      scene: new THREE.Scene(),
+      camera: new THREE.PerspectiveCamera(),
+    } as any
+
+    const disconnect = new XRControllerSource(context, xr as any, 1).connect()
+    xr.dispatch("sessionstart")
+
+    controller.dispatchEvent({ type: "selectstart", data: { handedness: "left" } } as any) // captures the mesh
+
+    // Drift the controller so its ray no longer hits the mesh.
+    controller.position.set(50, 50, 5)
+    controller.updateMatrixWorld()
+
+    controller.dispatchEvent({ type: "selectend", data: { handedness: "left" } } as any)
+    expect(end).toHaveBeenCalledTimes(1) // still delivered to the grabbed mesh
+    expect(endElement).toBe(mesh)
+
+    disconnect()
+  })
+
   it("xrEvents() registers a handler-bearing mesh and wires the source once per ctx", () => {
     const start = vi.fn()
     const controller = new THREE.Object3D()

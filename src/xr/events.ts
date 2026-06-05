@@ -2,17 +2,18 @@ import { onCleanup, runWithOwner } from "solid-js"
 import type { Intersection, Object3D } from "three"
 import { Pointer } from "../pointers.ts"
 import { ControllerRaycaster } from "../raycasters.tsx"
-import type { Context, Plugin, ThreeEvent } from "../types.ts"
+import type { Context, Plugin, PointerCapture, ThreeEvent } from "../types.ts"
 import { getMeta } from "../utils.ts"
 
 /** The rich payload XR handlers receive. */
-export type XRThreeEvent = ThreeEvent<XRInputSourceEvent> & {
-  controller: Object3D
-  inputSource: XRInputSource | undefined
-  handedness: XRHandedness | undefined
-  element: Object3D | undefined
-  intersection: Intersection
-}
+export type XRThreeEvent = ThreeEvent<XRInputSourceEvent> &
+  PointerCapture & {
+    controller: Object3D
+    inputSource: XRInputSource | undefined
+    handedness: XRHandedness | undefined
+    element: Object3D | undefined
+    intersection: Intersection
+  }
 
 /** A controller's `selectstart`/`selectend`/`squeezestart`/`squeezeend` event. */
 type ControllerEvent = { type: string; data?: XRInputSource }
@@ -28,11 +29,13 @@ type XRLike = {
   removeEventListener(type: string, listener: () => void): void
 }
 
+// [native event, handler name, isEnd] — `isEnd` releases capture after dispatch
+// (the XR analogue of the browser's auto-release on pointerup).
 const PAIRS = [
-  ["selectstart", "onXRSelectStart"],
-  ["selectend", "onXRSelectEnd"],
-  ["squeezestart", "onXRSqueezeStart"],
-  ["squeezeend", "onXRSqueezeEnd"],
+  ["selectstart", "onXRSelectStart", false],
+  ["selectend", "onXRSelectEnd", true],
+  ["squeezestart", "onXRSqueezeStart", false],
+  ["squeezeend", "onXRSqueezeEnd", true],
 ] as const
 
 /**
@@ -58,14 +61,20 @@ export class XRControllerSource {
       for (let index = 0; index < this.count; index++) {
         const controller = this.xr.getController(index)
         const pointer = new Pointer(this.context, new ControllerRaycaster(controller))
-        const listeners = PAIRS.map(([native, handler]) => {
+        const listeners = PAIRS.map(([native, handler, isEnd]) => {
           const listener = (event: ControllerEvent) => {
             const inputSource = event.data
-            pointer.dispatch(handler, new Event(native), {
-              controller,
-              inputSource,
-              handedness: inputSource?.handedness,
-            })
+            pointer.dispatch(
+              handler,
+              new Event(native),
+              {
+                controller,
+                inputSource,
+                handedness: inputSource?.handedness,
+              },
+              true,
+            )
+            if (isEnd) pointer.release()
           }
           return [native, listener] as const
         })
