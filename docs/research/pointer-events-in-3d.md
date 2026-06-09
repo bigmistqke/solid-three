@@ -227,7 +227,7 @@ Neither is more "standard" than the other — it's an even split. What separates
 
 ## Worked scenarios
 
-Four concrete scenes, across the DOM and the prior art (solid-three's behaviour lives in its own section). In the snippets, `<Box>` / `<Text>` are 3D mesh components and `<Canvas>` is the scene root.
+Five concrete scenes, across the DOM and the prior art (solid-three's behaviour lives in its own section). In the snippets, `<Box>` / `<Text>` are 3D mesh components and `<Canvas>` is the scene root.
 
 **1. Click empty space — the void.**
 
@@ -275,6 +275,21 @@ Four concrete scenes, across the DOM and the prior art (solid-three's behaviour 
 - r3f / Threlte (depth-tunnel): A fires, then B fires too — unless A calls `stopPropagation`.
 - TresJS / pmndrs (closest-hit): only A fires; B is never considered.
 - This is the sharpest demonstration that "propagation" is two different motions: r3f and Threlte travel _back through depth_; the DOM and pmndrs never do.
+
+**5. Click through a front `onWheel`-only box to an `onClick` box behind it.**
+
+```jsx
+<Box onWheel={scroll} /> // front — its only handler is onWheel
+<Box position={[0, 0, -1]} onClick={select} /> // behind it — has onClick
+// click where they overlap; the front box is nearest
+```
+
+The front box catches the click everywhere (union — its `onWheel` makes it hittable by _every_ gesture), but it has no `onClick`. The question is whether the click still reaches the box behind it.
+
+- r3f / Threlte (depth-tunnel): yes — the ray tunnels past the front box, and the back `onClick` **fires**.
+- TresJS / pmndrs (closest-hit): no — only the nearest hit (the front box) is considered, the back box is never visited, and its `onClick` **doesn't fire**. The unrelated `onWheel` silently blocks it.
+- DOM: like closest-hit — the front element is the topmost target, and a click on it bubbles up its _ancestors_, never to the element behind.
+- Scenarios 2 and 4 combined: an unrelated handler is a catch-all under union, and under closest-hit that catch-all blocks whatever sits behind it — exactly what depth-tunnelling would have reached.
 
 ## Sources
 
