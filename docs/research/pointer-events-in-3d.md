@@ -22,7 +22,7 @@ But the taxonomy is in service of one concrete question — the reason this docu
 
 ## How this document is organised
 
-Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; the document closes with a deep-dive on what `onPointerMissed` actually is. solid-three's own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
+Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; the miss axis closes with a deep-dive on what `onPointerMissed` actually is. solid-three's own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
 
 The three axes:
 
@@ -140,6 +140,63 @@ The canvas-level 3D handler each system provides is singular and dedicated — w
 
 Because any single handler makes an object catch _every_ gesture, an unrelated handler (`onWheel`) still suppresses the void — the object counts as a hit even though nothing consumes the click. No miss _representation_ fixes that; only an occlusion-level change (making that object not catch clicks) would, and none of the prior art offers one.
 
+### What `onPointerMissed` actually is — a complement, not an event
+
+A normal pointer event begins at a hit and _propagates_ — back through depth, up the tree — and `stopPropagation` can halt it. `onPointerMissed` does neither. On every click r3f runs a separate pass: for each interactive object, fire its `onPointerMissed` if that object was _not_ among the hit objects.
+
+```js
+// conceptually, on every click — fire on every interactive object NOT hit:
+for (const obj of interaction) {
+  if (!hitObjects.includes(obj)) obj.onPointerMissed?.(event)
+}
+```
+
+It reads no `stopped` flag and walks no chain. It's the _complement of the hit set_ — "fire on everyone who wasn't hit" — which is just the miss's two levels at once: **the void** (nobody was hit → every object fires) and **not-me** (someone else was hit → every object except the hit ones). So `onPointerMissed` is a non-propagating, per-object _deselection_ notification: it fires on every interactive object _except_ the ones the click hit. Not an event in the propagation model; a derived signal bolted alongside it.
+
+One non-obvious property: `onPointerMissed` counts toward `eventCount`, so it makes the object raycast-able — a "negative" handler quietly puts the object in the hit-test set. The object then fires its `onPointerMissed` on any click that didn't land on it _or a descendant_ — another mesh and empty space both count. The one thing it's blind to is clicks within its own subtree: those bubble up and register as hitting it, so a parent never gets a miss for its own children.
+
+### The deselection need underneath
+
+Strip the mechanism away and the need `onPointerMissed` serves is deselection. There are two shapes for it. With `onPointerMissed`, it's _decentralized_ — each selectable object owns a boolean and listens for "not-me":
+
+```jsx
+function Selectable() {
+  const [selected, setSelected] = createSignal(false)
+  return (
+    <Box
+      onClick={e => {
+        e.stopPropagation()
+        setSelected(true)
+      }}
+      onPointerMissed={() => setSelected(false)}
+    />
+  )
+}
+```
+
+The selection state is then spread across the scene, and every selectable object is part of the complement pass.
+
+The same need can also be _centralized_ — **one signal, cleared by the void:**
+
+```jsx
+const [selected, setSelected] = createSignal()
+
+// selecting is a positive click; the void deselects
+<Canvas onPointerDown={e => { if (!e.object) setSelected(undefined) }}>
+  <Box onPointerDown={e => { e.stopPropagation(); setSelected("a") }} />
+  <Box onPointerDown={e => { e.stopPropagation(); setSelected("b") }} />
+</Canvas>
+
+// each box re-derives its own state — no "not-me" notification needed:
+const isSelectedA = () => selected() === "a"
+```
+
+In this shape the "not-me" notification isn't needed: box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is set by a positive click (with `stopPropagation`); deselection is the void clearing the signal. The two shapes have different properties — decentralized scatters state and pays the complement pass; centralized concentrates state and leans on the void — and which fits a given app is a design choice, not something this document settles.
+
+### Where `onPointerMissed` came from (in r3f)
+
+`onPointerMissed` entered r3f in two stages, which is why it does two things. The **canvas** form came first (drcmda, 2019-08-06, commit `3871afba`), firing only on a click that hit nothing — the deselect / click-empty-space signal: a 3D click on empty space hits nothing and produces no event, where a DOM page gets the same affordance for free (a background click bubbles to `document`). The **per-object** form was a separate, later addition (drcmda, 2020-12-03, commit `15b348b0`, "allow onPointerMissed on the object level"), firing on a mesh when you click anything but it. r3f's docs and downstream issues motivate the canvas form; the per-object form's rationale is undocumented. (`onPointerMissed` is r3f-original — the earlier `react-three-renderer`, 2015, had no pointer-raycasting at all.)
+
 ## The landscape, at a glance
 
 | Axis                               | DOM                                        | react-three-fiber                              | TresJS / `@pmndrs/pointer-events`                                                       | Threlte                                                                |
@@ -151,17 +208,6 @@ Because any single handler makes an object catch _every_ gesture, an unrelated h
 | **The miss**                       | none native (read `target === background`) | `onPointerMissed`: canvas **and** per-object   | VoidObject (canvas-level only); a positive hit on a synthetic sphere                    | per-object `onpointermissed` **only** — no canvas-level, no VoidObject |
 
 Two clusters fall out of it. **r3f and Threlte are nearly the same system** — z-depth-tunnel + ancestor-bubble propagation and per-object `onPointerMissed` (their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops). `@pmndrs/pointer-events` (and thus TresJS) is the real outlier: closest-hit-only propagation, the VoidObject, and the only true per-object override. So the "mainstream 3D" model is r3f's, and pmndrs is the one genuine alternative — and it's also the most DOM-faithful on every axis (closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property).
-
-## Where the confusion comes from
-
-_The specific conflations to name and defuse:_
-
-- "It bubbles like the DOM" → assumed ancestor propagation, but r3f and Threlte move along z-depth too.
-- "Missed = no handler ran" → actually "no _interactive object_ was hit"; an object with an unrelated handler counts as a hit.
-- "No handler = harmless" → it's `pointer-events: none`; the object vanishes from hit-testing entirely (so a click can fall through it to whatever's behind).
-- "Handler-less = always pass-through" → true only for non-descendants; a handler-less _child_ of an interactive parent is swept in by the recursive raycast and delegates up to it.
-- "The void is the miss" → the void is only the canvas-level half; per-object "missed" fires on a real hit elsewhere.
-- "Borrowed the words = borrowed the behavior" → the DOM vocabulary is reused even where the behavior diverges.
 
 ## Worked scenarios
 
@@ -213,91 +259,6 @@ Four concrete scenes, across the DOM and the prior art (solid-three's behaviour 
 - r3f / Threlte (depth-tunnel): A fires, then B fires too — unless A calls `stopPropagation`.
 - TresJS / pmndrs (closest-hit): only A fires; B is never considered.
 - This is the sharpest demonstration that "propagation" is two different motions: r3f and Threlte travel _back through depth_; the DOM and pmndrs never do.
-
-## `onPointerMissed`: what it actually is
-
-What _is_ an `onPointerMissed` event, mechanically? The rest of this section answers that — and the short version is that it isn't an event at all. (What solid-three should _do_ about it is left open, in Open questions.)
-
-### It isn't an event — it's a complement
-
-A normal pointer event begins at a hit and _propagates_ — back through depth, up the tree — and `stopPropagation` can halt it. `onPointerMissed` does neither. On every click r3f runs a separate pass: for each interactive object, fire its `onPointerMissed` if that object was _not_ among the hit objects.
-
-```js
-// conceptually, on every click — fire on every interactive object NOT hit:
-for (const obj of interaction) {
-  if (!hitObjects.includes(obj)) obj.onPointerMissed?.(event)
-}
-```
-
-It reads no `stopped` flag and walks no chain. It's the _complement of the hit set_ — "fire on everyone who wasn't hit." And that one shape quietly bundles two different questions:
-
-- **the void** — _nobody_ was hit (you clicked empty space); every object's `onPointerMissed` fires.
-- **not-me** — _someone else_ was hit; every object except the hit ones fires.
-
-So "what is `onPointerMissed`?" — it's a non-propagating, per-object _deselection_ notification: it fires on every interactive object _except_ the ones the click hit. Not an event in the propagation model; a derived signal bolted alongside it.
-
-### The self-disqualification gotcha
-
-`onPointerMissed` _itself_ makes an object interactive — it raises `eventCount`, the internal counter that decides whether an object is in the hit-test set. That creates a trap: the very property that makes an object _eligible_ for a miss (it has a handler) is what makes it count as _hit_ whenever anything in its subtree is clicked (it has a handler, so its descendants' clicks bubble up into the hit set). So a parent that listens for `onPointerMissed` is silently excluded from its own children's clicks — it only ever misses on the _true void_, never on its own descendants. Walk a concrete case:
-
-```jsx
-// OUTER is interactive *because* onPointerMissed counts toward eventCount
-<Box onPointerMissed={deselect}>
-  <Box onClick={select} />
-</Box>
-```
-
-```
-click INNER:
-  ray hits INNER's geometry
-  bubble up through handlers  →  hitObjects = [INNER, OUTER]   (OUTER has a handler)
-  complement = interaction − hitObjects = []                   (OUTER is in hitObjects)
-  ⇒ OUTER.onPointerMissed does NOT fire
-```
-
-The trace confirms it: OUTER bubbles into `hitObjects`, so it's not in the complement, so its `onPointerMissed` stays silent. `stopPropagation` doesn't enter into it either — the missed pass ignores `stopped` entirely.
-
-### The problem underneath: deselection
-
-Strip the mechanism away and the need `onPointerMissed` serves is deselection. There are two shapes for it. With `onPointerMissed`, it's _decentralized_ — each selectable object owns a boolean and listens for "not-me":
-
-```jsx
-function Selectable() {
-  const [selected, setSelected] = createSignal(false)
-  return (
-    <Box
-      onClick={e => {
-        e.stopPropagation()
-        setSelected(true)
-      }}
-      onPointerMissed={() => setSelected(false)}
-    />
-  )
-}
-```
-
-The selection state is then spread across the scene, every object is part of the complement pass, and each is subject to the self-disqualification rule above.
-
-The same need can also be _centralized_ — **one signal, cleared by the void:**
-
-```jsx
-const [selected, setSelected] = createSignal()
-
-// selecting is a positive click; the void deselects
-<Canvas onPointerDown={e => { if (!e.object) setSelected(undefined) }}>
-  <Box onPointerDown={e => { e.stopPropagation(); setSelected("a") }} />
-  <Box onPointerDown={e => { e.stopPropagation(); setSelected("b") }} />
-</Canvas>
-
-// each box re-derives its own state — no "not-me" notification needed:
-const isSelectedA = () => selected() === "a"
-```
-
-In this shape the "not-me" notification isn't needed: box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is set by a positive click (with `stopPropagation`); deselection is the void clearing the signal. The two shapes have different properties — decentralized scatters state and pays the complement pass; centralized concentrates state and leans on the void — and which fits a given app is a design choice, not something this document settles.
-
-### Where it came from (in r3f)
-
-`onPointerMissed` entered r3f in two stages, which is why it does two things. The **canvas** form came first (drcmda, 2019-08-06, commit `3871afba`), firing only on a click that hit nothing — the deselect / click-empty-space signal: a 3D click on empty space hits nothing and produces no event, where a DOM page gets the same affordance for free (a background click bubbles to `document`). The **per-object** form was a separate, later addition (drcmda, 2020-12-03, commit `15b348b0`, "allow onPointerMissed on the object level"), firing on a mesh when you click anything but it. r3f's docs and downstream issues motivate the canvas form; the per-object form's rationale is undocumented. (`onPointerMissed` is r3f-original — the earlier `react-three-renderer`, 2015, had no pointer-raycasting at all.)
 
 ## Sources
 
