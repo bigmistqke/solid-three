@@ -41,7 +41,6 @@ A handful of terms are used precisely throughout:
 - **propagation** — the axis of _how a hit becomes handler calls_: which handlers fire, and in what order. There are two directions an event can travel from a hit: **ancestor bubbling** (up the hit object's parent chain, as in the DOM) and **z-depth tunnelling** (back through the objects stacked _behind_ the hit, nearest first). Every system here bubbles up ancestors and varies only on whether it _also_ tunnels through depth. **closest-hit** is just the name for the no-tunnelling case: only the nearest object, then its ancestors.
 - **the miss** — the axis of _how code learns a click didn't land on a target_. Two levels: **the void** (clicked empty space — nothing hit) and per-object **"not-me"** (clicked some _other_ object).
 - **subtree delegation** — a handler on a parent makes its whole subtree catch the pointer; a click on a handler-less child fires the parent.
-- **complement set** — the interactive objects a click did _not_ hit: everything except what was clicked. (The per-object "missed" event, introduced later, fires on exactly this set.)
 
 ## Occlusion — which objects stop the ray?
 
@@ -128,7 +127,7 @@ The negative signal — code learning that a click did _not_ land on a given tar
 - **the void** — canvas-level: the click hit _nothing_ (empty space). This is the deselect case.
 - per-object **"not-me"** — the click hit _something else_ (another object).
 
-"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one — its mechanics are the deep-dive at the end of this section. First, each framework.
+"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one — what `onPointerMissed` really is, and the design need under it, close the section. First, each framework.
 
 ### DOM
 
@@ -142,9 +141,9 @@ No native miss — neither level is a fired event.
 **Both levels**, both via `onPointerMissed`:
 
 - **the void:** the canvas-level `onPointerMissed` callback fires on a total miss.
-- **not-me:** per-object `onPointerMissed` fires as the _complement_ of the hit set — every interactive object that was not hit.
+- **not-me:** per-object `onPointerMissed` fires on every interactive object that was _not_ hit.
 
-Both are a non-propagating pass over `internal.interaction`; they ignore `stopPropagation`.
+Both are a non-propagating pass over r3f's interactive objects; they ignore `stopPropagation`.
 
 ### TresJS / @pmndrs/pointer-events
 
@@ -160,20 +159,20 @@ Both are a non-propagating pass over `internal.interaction`; they ignore `stopPr
 **Per-object only.**
 
 - **the void:** none — no canvas signal, no VoidObject.
-- **not-me:** per-object `onpointermissed` (r3f's complement) fires on every registered object not hit.
+- **not-me:** per-object `onpointermissed` — r3f's per-object miss — fires on every registered object not hit.
 
 Deselect therefore means putting `onpointermissed` on the selectable object itself.
 
 ### Where they land
 
-#### The level is forced by the representation
+#### The representation forces the level — and propagation forces the representation
 
-r3f is the only one that paid for both levels — because each representation _forces_ a level:
+There are two ways to represent the miss:
 
-- a **VoidObject** is one global object, so it can only ever report "the _scene_ was missed" → **canvas-only** (TresJS).
-- a **per-object complement** is per-object by construction; a canvas total-miss is only an optional bolt-on → Threlte keeps the per-object half and drops the bolt-on.
+- **a computed miss** (r3f) — fire on every interactive object the ray did _not_ hit. Per-object by nature; the canvas total-miss (nobody hit → every object fires) is the same pass at its limit, so it spans _both_ levels. r3f exposes both; Threlte keeps only the per-object half.
+- **a VoidObject** (pmndrs/TresJS) — a synthetic object the ray _hits_ when nothing real is closer, so the miss is an ordinary click on it. One global object, so it can only ever report "the _scene_ was missed" → canvas-only.
 
-So the two r3f descendants each inherited the _opposite_ half.
+Why the split? **Propagation.** A VoidObject only works under closest-hit: the ray stops at the nearest object, so a background sphere is "the hit" exactly when nothing real is in front. Under r3f's z-depth tunnel every stacked hit fires, so a permanent background sphere would be caught on _every_ click — useless as a miss signal unless special-cased. r3f tunnels, so it can't use a VoidObject; it computes the miss instead. **The miss representation is downstream of the propagation choice.**
 
 #### Delivery: at most one dedicated canvas handler
 
@@ -187,24 +186,11 @@ The canvas-level 3D handler each system provides is singular and dedicated — w
 
 Because any single handler makes an object catch _every_ gesture, an unrelated handler (`onWheel`) still suppresses the void — the object counts as a hit even though nothing consumes the click. No miss _representation_ fixes that; only an occlusion-level change (making that object not catch clicks) would, and none of the prior art offers one.
 
-### What `onPointerMissed` actually is — a complement, not an event
-
-A normal pointer event begins at a hit and _propagates_ — back through depth, up the tree — and `stopPropagation` can halt it. `onPointerMissed` does neither. On every click r3f runs a separate pass: for each interactive object, fire its `onPointerMissed` if that object was _not_ among the hit objects.
-
-```js
-// conceptually, on every click — fire on every interactive object NOT hit:
-for (const obj of interaction) {
-  if (!hitObjects.includes(obj)) obj.onPointerMissed?.(event)
-}
-```
-
-It reads no `stopped` flag and walks no chain. It's the _complement of the hit set_ — "fire on everyone who wasn't hit" — which is just the miss's two levels at once: **the void** (nobody was hit → every object fires) and **not-me** (someone else was hit → every object except the hit ones). So `onPointerMissed` is a non-propagating, per-object _deselection_ notification: it fires on every interactive object _except_ the ones the click hit. Not an event in the propagation model; a derived signal bolted alongside it.
-
-One non-obvious property: `onPointerMissed` counts toward `eventCount`, so it makes the object raycast-able — a "negative" handler quietly puts the object in the hit-test set. The object then fires its `onPointerMissed` on any click that didn't land on it _or a descendant_ — another mesh and empty space both count. The one thing it's blind to is clicks within its own subtree: those bubble up and register as hitting it, so a parent never gets a miss for its own children.
-
 ### The deselection need underneath
 
-Strip the mechanism away and the need `onPointerMissed` serves is deselection. There are two shapes for it. With `onPointerMissed`, it's _decentralized_ — each selectable object owns a boolean and listens for "not-me":
+`onPointerMissed` isn't an event in the propagation sense — it doesn't begin at a hit and travel, and `stopPropagation` doesn't touch it. It's a non-propagating signal that fires on every interactive object the click did _not_ land on: the two levels at once — **the void** (nobody was hit, so every object fires) and **not-me** (something else was hit, so every object but that one fires).
+
+Strip the mechanism away and the need it serves is **deselection**. There are two shapes for it. With `onPointerMissed`, it's _decentralized_ — each selectable object owns a boolean and listens for "not-me":
 
 ```jsx
 function Selectable() {
@@ -221,7 +207,7 @@ function Selectable() {
 }
 ```
 
-The selection state is then spread across the scene, and every selectable object is part of the complement pass.
+The selection state is then spread across the scene, and every selectable object has to be checked on every click.
 
 The same need can also be _centralized_ — **one signal, cleared by the void:**
 
@@ -242,7 +228,7 @@ In this shape the "not-me" notification isn't needed: box B re-derives `selected
 
 The two shapes have different properties:
 
-- **decentralized** — scatters selection state across objects and pays the complement pass.
+- **decentralized** — scatters selection state across objects; every selectable object is checked on each click.
 - **centralized** — concentrates state in one signal and leans on the void.
 
 Which fits a given app is a design choice, not something this document settles.
