@@ -1,6 +1,6 @@
 # Pointer events in 3D: occlusion, propagation, and the miss
 
-> Working draft. An analysis of the problem space, using react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte as prior art — then a dedicated section on solid-three's own chronology. Versions and the source files read are listed under **Sources** at the end (all 2026-06-09).
+> Working draft. An analysis of the problem space, using react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte as prior art. Versions and the source files read are listed under **Sources** at the end (all 2026-06-09). solid-three's own history is a companion document — [solid-three's pointer-event system: a chronology](./solid-three-event-system.md).
 
 ## The problem
 
@@ -22,7 +22,7 @@ But the taxonomy is in service of one concrete question — the reason this docu
 
 ## How this document is organised
 
-Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; its own path through the space is a dedicated chronology near the end, followed by a deep-dive on `onPointerMissed` and the design questions that remain.
+Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; the document closes with a deep-dive on what `onPointerMissed` actually is. solid-three's own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
 
 The three axes:
 
@@ -89,7 +89,7 @@ Only handler-bearing objects catch the pointer (an explicit `interactiveObjects`
 
 ### Where they land
 
-All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **union** (any handler → catch-all — no prior-art system does _per-type_; catching only some gestures is a road solid-three alone took, in its chronology) and on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
+All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **union** (any handler → catch-all — no prior-art system does _per-type_; catching only some gestures is a road solid-three alone took — see its [chronology](./solid-three-event-system.md)) and on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
 
 ## Propagation — how a hit becomes handler calls
 
@@ -308,52 +308,6 @@ In this shape the "not-me" notification isn't needed: box B re-derives `selected
 ### Where it came from (in r3f)
 
 `onPointerMissed` entered r3f in two stages, which is why it does two things. The **canvas** form came first (drcmda, 2019-08-06, commit `3871afba`), firing only on a click that hit nothing — the deselect / click-empty-space signal: a 3D click on empty space hits nothing and produces no event, where a DOM page gets the same affordance for free (a background click bubbles to `document`). The **per-object** form was a separate, later addition (drcmda, 2020-12-03, commit `15b348b0`, "allow onPointerMissed on the object level"), firing on a mesh when you click anything but it. r3f's docs and downstream issues motivate the canvas form; the per-object form's rationale is undocumented. (`onPointerMissed` is r3f-original — the earlier `react-three-renderer`, 2015, had no pointer-raycasting at all.)
-
-## solid-three's event system: a chronology
-
-solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour as an unintended side effect, and the current state isn't one design but a fork between two. Skip this section unless you want solid-three's specific path. (Branch names that recur below: `main` = the original/legacy port; `next` = the current development line; `next-dirty` = `next`'s un-squashed history, where the hashes and dates come from.)
-
-### 2023 — a 1:1 r3f port
-
-solid-three began as a close port of r3f, down to the `solid-zustand` store: the `interaction` array, `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble (`src/core/events.ts` carries r3f's bubble loop verbatim). `onPointerMissed` arrived via `vorth/pointer-missed` (PR #8, merge `dd794de1`, 2023-05-22; closes issue **#7**), with a follow-up bugfix that December. The later zustand → `solid-js/store` migration (`f8bc3716`, 2023-07-16) left the bubbling untouched. (This port still lives on `main`.)
-
-### 2024 — a from-scratch rewrite re-adds bubbling
-
-The current solid-three does **not** descend from that port; it descends from a separate, from-scratch rewrite (the flat `src/` layout, no `zustand`) that branched off at the PR #8 merge (`dd794de1`) and re-implemented events. `cc02bab4` (2024-04-11) deleted `src/core/events.ts` and added a flat `src/events.ts` with **no bubbling at all**; `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back — re-establishing what the original port had had all along, not introducing anything new. The two lines are genuinely parallel: `git merge-base` confirms the port tip is _not_ an ancestor of the rewrite, and `next` descends from the rewrite, not the port.
-
-### Aug 2025 — the `*Missed` era, the first deliberate redesign
-
-A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), computed as a _complement set_ — fire on every registered object the ray did _not_ hit, occlusion-correct and `stopPropagation`-aware. The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — the **per-type occlusion** design: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
-
-### Jun 2026 — #66, the source-agnostic refactor (the regression)
-
-`#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases — and, as collateral, **collapsed the per-category registries into one union `eventRegistry`** (`addEventListener(object, _type)` now ignores `_type`). Changing occlusion semantics wasn't the goal; the collapse served source-agnosticism. But it flipped per-type → union, reintroducing the `onWheel`-suppresses-click-miss asymmetry the per-category design had avoided. No test caught it — the suite pinned registry _routing_, not observable behaviour.
-
-### Jun 2026 — #69 / #72, capture and typing
-
-Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` event API (#69, `2f321abe`, 2026-06-07); a typed dispatched event replacing the `any` bag (#72, `0c61cbc0`, 2026-06-07). The `*Missed` complement-set rode through both unchanged. This — union registry + `*Missed` — is what's merged on `next` today.
-
-### Jun 2026 — the void fork (open)
-
-Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, both **unmerged**. They are _parallel proposals_, not a sequence: `git merge-base --is-ancestor` confirms neither is an ancestor of the other. Both move solid-three off the r3f-shaped `*Missed` (per-object complement, both levels) toward a tres-shaped, void-only model:
-
-- **#75 `onVoid*`** (`feat/void-events`; `d25e9e3d`, `b1671bcb`): drop `*Missed` for a dedicated `onVoid*` canvas family (`onVoidClick`, `onVoidPointerDown`, …) — a per-gesture void handler, matching the prior-art convention of a dedicated canvas miss handler.
-- **#76 `event.object`** (`feat/void-via-event-object`; `dad769e`): drop `*Missed` and detect the void by reading `event.object` (undefined) on the ordinary canvas-level handler — the "general canvas handler carries `event.object`" model.
-
-The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals the `onWheel` asymmetry still stands.
-
-### Threads through this history
-
-- **The regression is the cautionary tale.** #66's per-type → union flip was invisible because the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (does clicking an `onWheel` object suppress the miss). The exhaustive test pass should assert behaviour.
-- **solid-three is the only one of the four with general canvas-level 3D handlers.** Its `<Canvas onClick>` (and every canvas pointer prop) is wired into the pointer system — a `context.props` callback fired after bubbling, carrying `event.object` (undefined on a void). r3f's and TresJS's `<Canvas onClick>` are plain DOM; Threlte has no canvas handler at all. That property is what makes #76's `event.object` model expressible — and it's unprecedented in the prior art.
-- **Object override is opt-out only**, via `raycastable={false}` — like r3f, there's no way to opt a handler-less object _in_.
-
-## Open questions
-
-- _Occlusion: per-type vs union._ `#66` collapsed per-type into union. Whether to restore per-type is open — and if per-type, whether a front object that doesn't handle the gesture should **block** (no fall-through, count as a void) or be **pass-through** (fall-through to whatever's behind). (The DOM is union-occlusion with no fall-through.)
-- _Propagation._ Keep r3f-style z-depth tunnelling, or move to closest-hit-only like `@pmndrs/pointer-events`?
-- _Override._ Stay opt-out-only (`raycastable`), or add a per-object `pointerEvents`-style control (pmndrs is the only prior art with one)?
-- _Miss model._ Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void; and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
 
 ## Sources
 
