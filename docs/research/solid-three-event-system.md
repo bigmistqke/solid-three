@@ -10,17 +10,17 @@ Branch names that recur: `main` = the original/legacy port; `next` = the current
 
 solid-three began as a close port of r3f, down to the `solid-zustand` store: the `interaction` array, `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble (`src/core/events.ts` carries r3f's bubble loop verbatim). `onPointerMissed` arrived via `vorth/pointer-missed` (PR #8, merge `dd794de1`, 2023-05-22; closes issue **#7**), with a follow-up bugfix that December. The later zustand → `solid-js/store` migration (`f8bc3716`, 2023-07-16) left the bubbling untouched. (This port still lives on `main`.)
 
-## 2024 — a from-scratch rewrite re-adds bubbling
+## 2024 — a from-scratch rewrite: bubbling back, occlusion quietly per-type
 
-The current solid-three does **not** descend from that port; it descends from a separate, from-scratch rewrite (the flat `src/` layout, no `zustand`) that branched off at the PR #8 merge (`dd794de1`) and re-implemented events. `cc02bab4` (2024-04-11) deleted `src/core/events.ts` and added a flat `src/events.ts` with **no bubbling at all**; `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back — re-establishing what the original port had had all along, not introducing anything new. The two lines are genuinely parallel: `git merge-base` (which finds two commits' most recent common ancestor) confirms the port tip is _not_ an ancestor of the rewrite, and `next` descends from the rewrite, not the port.
+The current solid-three does **not** descend from that port; it descends from a separate, from-scratch rewrite (the flat `src/` layout, no `zustand`) that branched off at the PR #8 merge (`dd794de1`) and re-implemented events. `cc02bab4` (2024-04-11) deleted `src/core/events.ts` and added a flat `src/events.ts` with **no bubbling at all** (and no `onPointerMissed` — the rewrite dropped it); `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back, re-establishing what the original port had had all along. The two lines are genuinely parallel: `git merge-base` (which finds two commits' most recent common ancestor) confirms the port tip is _not_ an ancestor of the rewrite, and `next` descends from the rewrite, not the port.
+
+The rewrite also changed occlusion — though no commit says so. Its `eventRegistry` was a dict keyed by event type: one object list per gesture (`eventRegistry.onClick`, `eventRegistry.onWheel`, …), and a click raycast only its own bucket (`intersectObjects(eventRegistry[type], true)`). An `onWheel`-only object was therefore never in the `onClick` bucket. That flipped occlusion from the **union** the 2023 port inherited from r3f (any handler ⇒ hittable by every gesture) to **per-type** (hittable only for the gestures it handles) — an emergent property of keying the registry by type, not a decision anyone recorded. The effect stayed invisible until `*Missed` arrived to expose it (next section).
 
 ## Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-Two changes landed in a burst of same-day commits (2025-08-04).
+A burst of same-day commits (2025-08-04) brought the miss back — and split it per gesture. `onPointerMissed` (dropped in the rewrite) returned as `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object a click _didn't_ land on — so a selectable object can hear "something else was clicked" and deselect itself (see _Deselection_, below). Unlike r3f's miss, these respect `stopPropagation`. The same pass (`a0ffc80f`) regrouped the registries by behaviour (missable / movable / default) but kept them keyed per type.
 
-**The miss was split per gesture** — `onPointerMissed` became `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object a click _didn't_ land on (and respecting `stopPropagation`, which r3f's miss doesn't).
-
-**And occlusion diverged from every other framework** (`a0ffc80f`). Take this scene and click the second box:
+`*Missed` is also what made solid-three's **per-type occlusion** — in place since the 2024 rewrite — finally observable. Click the second box:
 
 ```jsx
 <Canvas onClickMissed={() => deselect()}>
@@ -29,13 +29,9 @@ Two changes landed in a burst of same-day commits (2025-08-04).
 </Canvas>
 ```
 
-Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an object catch every gesture** ("union"). So B catches your _click_ even though it only wants the wheel: the click lands on B, the canvas sees a hit rather than a miss, `onClickMissed` never fires, and your deselect silently doesn't happen. An unrelated `onWheel` ate the click.
+Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an object catch every gesture** ("union"): B would catch your _click_ even though it only wants the wheel, the canvas would see a hit rather than a miss, and `onClickMissed` would never fire — deselect silently broken. But solid-three is **per-type**: B sits only in the `onWheel` bucket, a click ray never tests it, the click hits nothing, `onClickMissed` fires, and deselect works.
 
-solid-three made occlusion **per-type**: an object catches only the gestures it handles. B handles the wheel, not clicks, so a click ray passes straight through it — the click hits nothing, `onClickMissed` fires, deselect works.
-
-(Mechanically: a separate object list — a "registry" — per gesture; B only joined the wheel list.)
-
-This was the one place solid-three behaved _better_ than the prior art. The next section is how it was lost.
+This was the one place solid-three behaved _better_ than the prior art — and, since nobody had decided it, the one most easily lost. The next section is how.
 
 ## Jun 2026 — #66, the source-agnostic refactor (the regression)
 
@@ -121,7 +117,15 @@ In a reactive renderer the centralized shape is cheap and idiomatic, which is wh
 
 ## Open questions
 
-- _Occlusion: per-type vs union._ `#66` collapsed per-type into union. Whether to restore per-type is open — and if per-type, whether a front object that doesn't handle the gesture should **block** (no fall-through, count as a void) or be **pass-through** (fall-through to whatever's behind). (The DOM is union-occlusion with no fall-through.)
+- _Occlusion: per-type vs union._ `#66` collapsed per-type into union; whether to restore per-type is open. And if per-type, a second question — what happens to a click that passes through a front object that doesn't handle it?
+
+  ```jsx
+  <Box position={front} onWheel={...} />   // front — handles wheel, not click
+  <Box position={back} onClick={...} />    // directly behind it
+  ```
+
+  Click where they overlap. Per-type means the front box doesn't catch the click — but does the click then **block** (the front box still stops the ray, so the click counts as a void) or **pass through** (reach the back box's `onClick`)? The DOM is union with no pass-through.
+
 - _Propagation._ Keep r3f-style z-depth tunnelling, or move to closest-hit-only like `@pmndrs/pointer-events`?
 - _Override._ Stay opt-out-only (`raycastable`), or add a per-object `pointerEvents`-style control (pmndrs is the only prior art with one)?
 - _Miss model._ Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void; and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
