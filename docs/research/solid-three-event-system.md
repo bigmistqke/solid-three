@@ -31,7 +31,7 @@ A burst of same-day commits (2025-08-04) brought the miss back — and split it 
 
 Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an object catch every gesture** ("union"): B would catch your _click_ even though it only wants the wheel, the canvas would see a hit rather than a miss, and `onClickMissed` would never fire — deselect silently broken. But solid-three is **per-type**: B sits only in the `onWheel` bucket, a click ray never tests it, the click hits nothing, `onClickMissed` fires, and deselect works.
 
-This was the one place solid-three behaved _better_ than the prior art — and, since nobody had decided it, the one most easily lost. The next section is how.
+Was this _better_? Not obviously: it dodged the unrelated-`onWheel` gotcha, but diverged from the union norm every other framework (and the DOM) shares, and it raised a question it never answered — should a click pass _through_ an object that doesn't handle it, or be blocked? Its likeliest real advantage was performance: each gesture raycasts only its own, smaller bucket, not every handler-bearing object. Either way, nobody had decided it — and an undecided behaviour is an easily-lost one. The next section is how.
 
 ## Jun 2026 — #66, the source-agnostic refactor (the regression)
 
