@@ -46,8 +46,10 @@ A handful of terms are used precisely throughout:
 
 Given a ray, which objects are even candidates to be hit — which objects are a **catch-all** for the pointer vs **pass-through**. Two sub-questions sharpen it:
 
-- **override:** can you flip the per-object default — a handler-less object made a catch-all, or a handler-bearing one made pass-through?
-- **subtree delegation:** does a handler-less _child_ of a handler-bearing parent catch the pointer?
+|                        | the question                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **override**           | can you flip the per-object default — a handler-less object made a catch-all, or a handler-bearing one made pass-through? |
+| **subtree delegation** | does a handler-less _child_ of a handler-bearing parent catch the pointer?                                                |
 
 ### DOM
 
