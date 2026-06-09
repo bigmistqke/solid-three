@@ -79,15 +79,25 @@ The open question is which void _representation_ wins. Neither restores the per-
 
 ## Open questions
 
-- _Occlusion: per-type vs union._ `#66` collapsed per-type into union; whether to restore per-type is open. And if per-type, a second question — what happens to a click that passes through a front object that doesn't handle it?
+### Occlusion: per-type vs union
 
-  ```jsx
-  <Box position={front} onWheel={...} />   // front — handles wheel, not click
-  <Box position={back} onClick={...} />    // directly behind it
-  ```
+`#66` collapsed per-type into union; whether to restore per-type is open. And if per-type, a second question — what happens to a click that passes through a front object that doesn't handle it?
 
-  Click where they overlap. Per-type means the front box doesn't catch the click — but does the click then **block** (the front box still stops the ray, so the click counts as a void) or **pass through** (reach the back box's `onClick`)? The DOM is union with no pass-through.
+```jsx
+<Box position={front} onWheel={...} />   // front — handles wheel, not click
+<Box position={back} onClick={...} />    // directly behind it
+```
 
-- _Propagation._ Keep r3f-style z-depth tunnelling, or move to closest-hit-only like `@pmndrs/pointer-events`?
-- _Override._ Stay opt-out-only (`raycastable`), or add a per-object `pointerEvents`-style control (pmndrs is the only prior art with one)?
-- _Miss model._ Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void (see [Deselection in solid-three](./deselection-in-solid-three.md)); and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
+Click where they overlap. Per-type means the front box doesn't catch the click — but does the click then **block** (the front box still stops the ray, so the click counts as a void) or **pass through** (reach the back box's `onClick`)? The DOM is union with no pass-through.
+
+### Propagation
+
+Keep r3f-style z-depth tunnelling, or move to closest-hit-only like `@pmndrs/pointer-events`?
+
+### Override
+
+Stay opt-out-only (`raycastable`), or add a per-object `pointerEvents`-style control (pmndrs is the only prior art with one)?
+
+### Miss model
+
+Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void (see [Deselection in solid-three](./deselection-in-solid-three.md)); and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
