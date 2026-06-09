@@ -6,7 +6,7 @@
 
 A 2D UI toolkit gets pointer events almost for free: the browser hit-tests the DOM, picks a target, and bubbles the event up the tree. A 3D scene has none of that machinery. There's a camera, a ray, and a graph of meshes — and from that you have to define, from scratch, what "the user clicked on that" even means: which object a ray belongs to, what happens to the objects behind it, and what it means to click where there is nothing at all.
 
-There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`), and Threlte all ship pointer-event systems, and all reached for the same reference: the DOM. Reuse its vocabulary — `onClick`, bubbling, `stopPropagation`, `pointer-events: none` — so a web developer feels at home. That's a reasonable instinct and worth taking seriously. It's also worth holding at arm's length, because the goal is not DOM parity — it's a pointer-event system that is good _for 3D_. Those are different targets, and the places where they pull apart are exactly where these systems get confusing.
+There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`), and Threlte all ship pointer-event systems, and all reached for the same reference: the DOM. (Two of them share an origin: react-three-fiber and the standalone `@pmndrs/pointer-events` that TresJS builds on both come from the **pmndrs** group — the doc calls them **r3f** and **pmndrs**.) Reuse its vocabulary — `onClick`, bubbling, `stopPropagation`, `pointer-events: none` — so a web developer feels at home. That's a reasonable instinct and worth taking seriously. It's also worth holding at arm's length, because the goal is not DOM parity — it's a pointer-event system that is good _for 3D_. Those are different targets, and the places where they pull apart are exactly where these systems get confusing.
 
 The core claim of this document: "pointer events" is not one decision but **three independent ones** — _occlusion_, _propagation_, and _the miss_ — and most of the confusion comes from treating them as a single bundle, or from assuming that because a system borrowed the DOM's _words_ it also borrowed the DOM's _behavior_.
 
@@ -26,14 +26,18 @@ The three axes:
 
 A handful of terms are used precisely throughout:
 
-- **catch-all** — an object that catches the pointer ray: the ray stops at it (it's in the hit-test set). Purely about whether the pointer stops here — nothing to do with rendering (a visually transparent mesh can still be a catch-all). By default the 3D libs make only handler-bearing objects catch-alls; the DOM makes all geometry a catch-all.
+- **gesture** — one kind of pointer event: `click`, `wheel`, `contextmenu`, `pointermove`, and so on.
+- **catch-all** — an object that catches the pointer ray: the ray stops at it (it's in the set of objects the ray is tested against). Purely about whether the pointer stops here — nothing to do with rendering (a visually transparent mesh can still be a catch-all). By default the 3D libs make only handler-bearing objects catch-alls; the DOM makes all geometry a catch-all.
 - **pass-through** — the opposite of a catch-all: the ray goes straight through the object, as if it weren't there.
 - **occlusion** — the axis of _which objects catch the pointer_ (and so block the ray from things behind them).
-- **propagation** — the axis of _how a hit becomes handler calls_. Two motions to keep apart: **ancestor bubbling** (up the hit object's parent chain) and **z-depth tunnelling** (back through the objects stacked behind it, front-to-back). **closest-hit** = only the nearest object, no tunnelling.
-- **the miss** — the axis of _how code learns a click didn't land on a target_. Two levels: **the void** (clicked empty space — nothing hit) and per-object **"not-me"** (clicked something else).
+- **propagation** — the axis of _how a hit becomes handler calls_: which handlers fire, and in what order. Three motions recur:
+  - **ancestor bubbling** — the event travels _up the hit object's parent chain_ (as in the DOM).
+  - **z-depth tunnelling** — the event travels _back through the objects stacked behind_ the hit, nearest first.
+  - **closest-hit** — only the nearest object is delivered to; no tunnelling.
+- **the miss** — the axis of _how code learns a click didn't land on a target_. Two levels: **the void** (clicked empty space — nothing hit) and per-object **"not-me"** (clicked some _other_ object).
 - **union vs per-type** — _union_: one handler makes an object a catch-all — it catches every gesture. _per-type_: an object catches only the gestures it actually handles (not a catch-all).
 - **subtree delegation** — a handler on a parent makes its whole subtree catch the pointer; a click on a handler-less child fires the parent.
-- **complement set** — the interactive objects a click did _not_ hit (everything except what was clicked). r3f's per-object `onPointerMissed` fires on exactly this set — a one-off sweep, not a propagating event.
+- **complement set** — the interactive objects a click did _not_ hit: everything except what was clicked. (The per-object "missed" event, introduced later, fires on exactly this set.)
 
 ## Occlusion — which objects stop the ray?
 
@@ -45,23 +49,39 @@ Given a ray, which objects are even candidates to be hit — which objects are a
 
 ### DOM
 
-All geometry catches the pointer; handlers are irrelevant to hit-testing (`elementFromPoint` is geometry plus the `pointer-events` CSS property). You opt _out_ per element with `pointer-events: none`, and get full per-element control via `auto | none`. There's no per-type notion — being a catch-all is all-or-nothing. Every element is a target, and delegation runs along ancestry.
+All geometry catches the pointer — handlers are irrelevant to hit-testing (the browser tests geometry plus the `pointer-events` CSS property), so a handler-less element still stops the pointer.
+
+- **Per-type or union?** N/A — an element catches every gesture, or (with `pointer-events: none`) none; there's no per-gesture distinction.
+- **Override?** Full, per element — `pointer-events: auto | none`.
+- **Subtree?** Yes — every element is a catch-all, and delegation runs up the ancestor chain.
 
 ### react-three-fiber
 
-Only objects with at least one handler catch the pointer: a handler raises `eventCount`, which lands the object in `internal.interaction` (the array the raycaster tests). A handler-less mesh is implicitly `pointer-events: none` — pass-through. **Union:** any handler makes the object a catch-all (it catches every gesture). **Override:** opt-out only, via three's `raycast={null}`; there's no way to opt a handler-less object _in_. **Subtree:** the raycast is recursive (`intersectObject(obj, true)`), so a handler-less child of a handler-bearing parent is swept in and delegates up to it.
+Only objects with at least one handler catch the pointer — adding a handler bumps an internal counter (`eventCount`) above zero, which puts the object in the list the ray is tested against (`internal.interaction`); a handler-less mesh is pass-through.
+
+- **Per-type or union?** Union — one handler of _any_ type catches every gesture (an `onWheel`-only box still stops a `click`).
+- **Override?** Opt-out only — `raycast={null}` makes a handler-bearing object pass-through; there's no way to opt a handler-less one _in_.
+- **Subtree?** Caught — the ray test is recursive, so a handler-less child inside a handler-bearing parent is swept in and its clicks delegate up to the parent.
 
 ### TresJS / @pmndrs/pointer-events
 
-Only objects with a listener catch the pointer by default (`pointerEvents` resolves to `'listener'`); handler-less meshes are pass-through. **Union:** any listener makes the object a catch-all. **Override:** the only system that replicates the DOM per object — `pointerEvents: 'auto' | 'listener' | 'none'` (`'auto'` a catch-all without a handler, `'none'` pass-through with one) — though in TresJS it's surfaced only incidentally — `nodeOps.patchProp` assigns the raw property onto the Object3D — not a typed/documented API. **Subtree:** a `parentHasListener` flag propagates down the tree, so descendants of an interactive object are tested.
+Only objects with a listener catch the pointer by default; a handler-less mesh is pass-through.
+
+- **Per-type or union?** Union — any listener makes the object a catch-all.
+- **Override?** Full, per object — `pointerEvents: 'auto' | 'listener' | 'none'` (`'auto'` = catch-all without a handler, `'none'` = pass-through with one). The only system that matches the DOM here, though in TresJS it's surfaced only incidentally (the raw property is assigned onto the object), not a typed/documented API.
+- **Subtree?** Caught — an "is interactive" flag propagates down the tree, so descendants of a handler-bearing object are tested.
 
 ### Threlte
 
-Only handler-bearing objects catch the pointer (an explicit `interactiveObjects` array); handler-less meshes are pass-through. **Union:** one handler makes the object a hit-target for all event types. **Override:** a single global `filter(hits)` only — no per-object flag, and no way to opt a handler-less object in. **Subtree:** the raycast is recursive (`intersectObjects(interactiveObjects, true)`).
+Only handler-bearing objects catch the pointer (an explicit `interactiveObjects` list); a handler-less mesh is pass-through.
+
+- **Per-type or union?** Union — one handler makes the object a hit-target for all event types.
+- **Override?** Global only — a single `filter(hits)` function, with no per-object flag and no way to opt a handler-less object _in_.
+- **Subtree?** Caught — the ray test is recursive over the interactive list and its descendants.
 
 ### Where they land
 
-All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **union** (any handler → catch-all — no prior-art system does _per-type_; catching only some gestures is a road solid-three alone took, in its chronology) and on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole.
+All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **union** (any handler → catch-all — no prior-art system does _per-type_; catching only some gestures is a road solid-three alone took, in its chronology) and on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
 
 ## Propagation — how a hit becomes handler calls
 
@@ -147,7 +167,7 @@ _The specific conflations to name and defuse:_
 
 ## Worked scenarios
 
-Four concrete scenes, across the DOM and the prior art (solid-three's behaviour lives in its own section).
+Four concrete scenes, across the DOM and the prior art (solid-three's behaviour lives in its own section). In the snippets, `<Box>` / `<Text>` are 3D mesh components and `<Canvas>` is the scene root.
 
 **1. Click empty space — the void.**
 
@@ -283,7 +303,7 @@ In this shape the "not-me" notification isn't needed: box B re-derives `selected
 
 ## solid-three's event system: a chronology
 
-solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour as an unintended side effect, and the current state isn't one design but a fork between two. (Hashes and dates below are from the un-squashed `next-dirty` history.)
+solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour as an unintended side effect, and the current state isn't one design but a fork between two. (This section is project history — skip it unless you want solid-three's specific path; hashes and dates are from the un-squashed `next-dirty` history.)
 
 ### 2023 — a 1:1 r3f port
 
