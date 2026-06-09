@@ -1,6 +1,6 @@
 # solid-three's pointer-event system: a chronology
 
-> Companion to [Pointer events in 3D](./pointer-events-in-3d.md), which maps the design space — occlusion, propagation, the miss — across the DOM, react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte. Read that first; this document reuses its vocabulary (the void, catch-all / pass-through, the r3f / tres poles) without re-deriving it — except _per-type vs union_, which is solid-three's own deviation and is defined below.
+> Companion to [Pointer events in 3D](./pointer-events-in-3d.md), which maps the design space — occlusion, propagation, the miss — across the DOM, react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte. Read that first; this document reuses its vocabulary (the void, catch-all / pass-through, the r3f and pmndrs/tres camps) without re-deriving it — except _per-type vs union_, which is solid-three's own deviation and is defined below.
 
 solid-three's pointer-event system was built the way most are: ported from react-three-fiber, then rewritten and re-rewritten — each time _without_ the design-space analysis the companion document lays out. This chronology records what the semantics actually _were_ at each stage, and the behaviour that _emerged_ from those rebuilds: some of it chosen deliberately, some of it not — most starkly, a regression nobody intended. It is the case study for why mapping the space first is worth doing.
 
@@ -16,7 +16,7 @@ The current solid-three does **not** descend from that port; it descends from a 
 
 ## Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), computed as a _complement set_ — fire on every registered object the ray did _not_ hit, occlusion-correct and `stopPropagation`-aware. The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — and with them the one place solid-three diverged from every other framework on _occlusion_. Everywhere else is **union**: any single handler makes an object catch _every_ gesture (a box with only `onWheel` is a catch-all for `click` too — a click ray still hits it). The per-category registries instead made an object catch only the gestures it actually handled — **per-type**: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
+A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), computed as a _complement set_ — fire on every registered object the ray did _not_ hit, occlusion-correct and `stopPropagation`-aware (where r3f's miss ignores `stopPropagation`). The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — and with them the one place solid-three diverged from every other framework on _occlusion_. Everywhere else is **union**: any single handler makes an object catch _every_ gesture (a box with only `onWheel` is a catch-all for `click` too — a click ray still hits it). The per-category registries instead made an object catch only the gestures it actually handled — **per-type**: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
 
 ## Jun 2026 — #66, the source-agnostic refactor (the regression)
 
@@ -58,7 +58,7 @@ function Selectable() {
 
 Selection state is scattered across the scene, and every selectable object is checked on each click.
 
-**Centralized** — one signal, cleared by the void. solid-three's `event.object` (undefined on a void) plus Solid reactivity make this the natural shape:
+**Centralized** — one signal, cleared by the void. Unlike the other three frameworks, solid-three wires `<Canvas>` handlers into the pointer system (see _Threads_, below), so a canvas handler carries `event.object` — `undefined` on a void. With Solid reactivity, that makes this the natural shape:
 
 ```jsx
 const [selected, setSelected] = createSignal()
@@ -86,7 +86,7 @@ In a reactive renderer the centralized shape is cheap and idiomatic, which is wh
 
 - **The regression is the cautionary tale.** #66's per-type → union flip was invisible because the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (does clicking an `onWheel` object suppress the miss). The exhaustive test pass should assert behaviour.
 - **solid-three is the only one of the four with general canvas-level 3D handlers.** Its `<Canvas onClick>` (and every canvas pointer prop) is wired into the pointer system — a `context.props` callback fired after bubbling, carrying `event.object` (undefined on a void). r3f's and TresJS's `<Canvas onClick>` are plain DOM; Threlte has no canvas handler at all. That property is what makes #76's `event.object` model expressible — and it's unprecedented in the prior art.
-- **Object override is opt-out only**, via `raycastable={false}` — like r3f, there's no way to opt a handler-less object _in_.
+- **Object override is opt-out only**, via a `raycastable={false}` prop (r3f's counterpart is `raycast={null}`) — like r3f, there's no way to opt a handler-less object _in_.
 
 ## Open questions
 
