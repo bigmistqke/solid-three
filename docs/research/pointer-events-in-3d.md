@@ -247,12 +247,12 @@ Which fits a given app is a design choice, not something this document settles.
 | **Propagation**                    | ancestors only                             | z-depth tunnel + ancestor bubble               | **closest hit only** + ancestor bubble                                                  | z-depth tunnel + ancestor bubble                                       |
 | **The miss**                       | none native (read `target === background`) | `onPointerMissed`: canvas **and** per-object   | VoidObject (canvas-level only); a positive hit on a synthetic sphere                    | per-object `onpointermissed` **only** — no canvas-level, no VoidObject |
 
-Two clusters fall out of it:
+Two even camps fall out of it:
 
-- **r3f and Threlte are nearly the same system** — z-depth-tunnel + ancestor-bubble propagation and per-object `onPointerMissed`. Their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops.
-- **`@pmndrs/pointer-events` (and thus TresJS) is the real outlier** — closest-hit-only propagation, the VoidObject, and the only true per-object override.
+- **the r3f camp** (r3f and Threlte) — z-depth-tunnel + ancestor-bubble propagation and per-object `onPointerMissed`. Their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops.
+- **the pmndrs camp** (`@pmndrs/pointer-events`, and TresJS, which builds on it) — closest-hit-only propagation, the VoidObject, and the only true per-object override.
 
-So the "mainstream 3D" model is r3f's, and pmndrs is the one genuine alternative — and it's also the most DOM-faithful on every axis: closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property.
+Neither is more "standard" than the other — it's an even split. What separates them is the DOM: on every axis where they differ, the pmndrs camp is the DOM-faithful side (closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property), while the r3f camp diverges from it.
 
 ## Worked scenarios
 
