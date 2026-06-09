@@ -10,6 +10,8 @@ There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`),
 
 The core claim of this document: "pointer events" is not one decision but **three independent ones** — _occlusion_, _propagation_, and _the miss_ — and most of the confusion comes from treating them as a single bundle, or from assuming that because a system borrowed the DOM's _words_ it also borrowed the DOM's _behavior_.
 
+But the taxonomy is in service of one concrete question — the reason this document exists: **what is `onPointerMissed` — the one inherited primitive solid-three has redesigned again and again (issue #21, the `*Missed` split, the `onVoid*`/`event.object` fork) — and should it keep it at all?** The thesis, argued through every axis below, is that `onPointerMissed` isn't really an event at all. It's a non-propagating _deselection_ shortcut that bundles two unlike needs: clicking **the void** (empty space), and learning that **something else** was clicked. The void is genuinely 3D-specific and deserves a first-class signal; the per-object "not-me" half is the awkward one, and ordinary centralised selection state replaces it. Occlusion, propagation, and the prior-art tour are the evidence for that call — which is why this isn't a chapter near the end so much as the reason for all the rest.
+
 ## How this document is organised
 
 Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; its own path through the space is a dedicated chronology near the end, followed by a deep-dive on `onPointerMissed` and the design questions that remain.
@@ -24,13 +26,14 @@ The three axes:
 
 A handful of terms are used precisely throughout:
 
-- **catch-all** — an object that catches the pointer ray; the ray stops at it (it's in the hit-test set). The opposite is **pass-through** — the ray goes straight through, as if the object weren't there. This is purely about whether the pointer stops here; nothing to do with rendering (a visually transparent mesh can still be a catch-all). By default the 3D libs make only handler-bearing objects catch-alls; the DOM makes all geometry a catch-all.
+- **catch-all** — an object that catches the pointer ray: the ray stops at it (it's in the hit-test set). Purely about whether the pointer stops here — nothing to do with rendering (a visually transparent mesh can still be a catch-all). By default the 3D libs make only handler-bearing objects catch-alls; the DOM makes all geometry a catch-all.
+- **pass-through** — the opposite of a catch-all: the ray goes straight through the object, as if it weren't there.
 - **occlusion** — the axis of _which objects catch the pointer_ (and so block the ray from things behind them).
 - **propagation** — the axis of _how a hit becomes handler calls_. Two motions to keep apart: **ancestor bubbling** (up the hit object's parent chain) and **z-depth tunnelling** (back through the objects stacked behind it, front-to-back). **closest-hit** = only the nearest object, no tunnelling.
 - **the miss** — the axis of _how code learns a click didn't land on a target_. Two levels: **the void** (clicked empty space — nothing hit) and per-object **"not-me"** (clicked something else).
 - **union vs per-type** — _union_: one handler makes an object a catch-all — it catches every gesture. _per-type_: an object catches only the gestures it actually handles (not a catch-all).
 - **subtree delegation** — a handler on a parent makes its whole subtree catch the pointer; a click on a handler-less child fires the parent.
-- **complement set** — "fire on every interactive object that was _not_ hit" — the set-subtraction r3f's per-object `onPointerMissed` runs (not a propagating event).
+- **complement set** — the interactive objects a click did _not_ hit (everything except what was clicked). r3f's per-object `onPointerMissed` fires on exactly this set — a one-off sweep, not a propagating event.
 
 ## Occlusion — which objects stop the ray?
 
@@ -106,11 +109,17 @@ No native miss. The void is read off the target: the background element is alway
 
 ### Where they land
 
-The **level is forced by the representation**, and r3f is the only one that paid for both. A VoidObject is one global object → canvas-only (TresJS). A complement set is per-object by construction, with a canvas total-miss as an optional bolt-on → Threlte keeps the per-object half and drops the bolt-on. So the two r3f descendants each inherited the _opposite_ half.
+#### The level is forced by the representation
 
-A second split — **how the canvas-level miss is delivered**: the canvas-level 3D handler each system provides is singular and dedicated — at most one of them, wired only to the miss, never a general-purpose canvas handler. r3f: one dedicated `onPointerMissed` (a plain `<Canvas onClick>` is DOM). TresJS: one dedicated `@pointermissed` (`<TresCanvas>` forwards the rest of the pointer set, but those are native DOM). Threlte: none.
+r3f is the only one that paid for both levels. A VoidObject is one global object, so it can only report "the _scene_ was missed" → canvas-only (TresJS). The per-object complement is per-object by construction, with a canvas total-miss available only as a bolt-on → Threlte keeps the per-object half and drops the bolt-on. So the two r3f descendants each inherited the _opposite_ half.
 
-And one cross-axis caveat: in any **union**-occlusion system, an unrelated handler (`onWheel`) still suppresses the void, because the object counts as a hit. No miss _representation_ fixes that — only the _occlusion_ choice (per-type) does. The miss and occlusion axes are not independent.
+#### Delivery: at most one dedicated canvas handler
+
+The canvas-level 3D handler each system provides is singular and dedicated — wired only to the miss, never a general-purpose canvas handler. r3f: one dedicated `onPointerMissed` (a plain `<Canvas onClick>` is DOM). TresJS: one dedicated `@pointermissed` (`<TresCanvas>` forwards the rest of the pointer set, but those are native DOM). Threlte: none.
+
+#### The miss and occlusion axes are not independent
+
+In any **union**-occlusion system, an unrelated handler (`onWheel`) still suppresses the void, because the object counts as a hit. No miss _representation_ fixes that — only the _occlusion_ choice (per-type) does.
 
 ## The landscape, at a glance
 
@@ -196,7 +205,7 @@ Two questions the rest of the doc leads up to: **what is an `onPointerMissed` ev
 A normal pointer event begins at a hit and _propagates_ — back through depth, up the tree — and `stopPropagation` can halt it. `onPointerMissed` does neither. On every click r3f runs a separate pass: for each interactive object, fire its `onPointerMissed` if that object was _not_ among the hit objects.
 
 ```js
-// conceptually, on every click — not propagation, a set-subtraction:
+// conceptually, on every click — fire on every interactive object NOT hit:
 for (const obj of interaction) {
   if (!hitObjects.includes(obj)) obj.onPointerMissed?.(event)
 }
@@ -207,11 +216,11 @@ It reads no `stopped` flag and walks no chain. It's the _complement of the hit s
 - **the void** — _nobody_ was hit (you clicked empty space); every object's `onPointerMissed` fires.
 - **not-me** — _someone else_ was hit; every object except the hit ones fires.
 
-So "what is `onPointerMissed`?" — it's a non-propagating, per-object _deselection_ notification, computed by subtracting the hit set from the interactive set. Not an event in the propagation model; a derived signal bolted alongside it.
+So "what is `onPointerMissed`?" — it's a non-propagating, per-object _deselection_ notification: it fires on every interactive object _except_ the ones the click hit. Not an event in the propagation model; a derived signal bolted alongside it.
 
 ### The self-disqualification gotcha
 
-Because the complement is taken over the _interactive_ set, and because `onPointerMissed` _itself_ makes an object interactive (it raises `eventCount`), a parent is silently excluded from its own children's clicks. Walk it:
+Because the miss fires on every interactive object _except_ the ones hit, and because `onPointerMissed` _itself_ makes an object interactive (it raises `eventCount`), a parent is silently excluded from its own children's clicks. Walk it:
 
 ```jsx
 // OUTER is interactive *because* onPointerMissed counts toward eventCount
@@ -228,7 +237,7 @@ click INNER:
   ⇒ OUTER.onPointerMissed does NOT fire
 ```
 
-The property that makes OUTER _eligible_ for a miss (it has a handler) is the same property that makes it count as _hit_ on any subtree click (it has a handler, so it bubbles into the hit set). A parent therefore only misses on the _true void_, never on its own descendants — a rule nobody writes down and everybody trips over. `stopPropagation` doesn't enter into it: the missed pass ignores `stopped` entirely.
+The property that makes OUTER _eligible_ for a miss (it has a handler) is the same property that makes it count as _hit_ on any subtree click (it has a handler, so it bubbles into the hit set). A parent therefore only misses on the _true void_, never on its own descendants — a non-obvious consequence of `onPointerMissed` raising `eventCount`. `stopPropagation` doesn't enter into it: the missed pass ignores `stopped` entirely.
 
 ### The problem underneath: deselection
 
@@ -281,13 +290,13 @@ The thing to protect is that the void stays _cheap and ergonomic_, because it no
 
 solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour nobody intended, and the current state isn't one design but a fork between two.
 
-### 2023 — inherited from r3f
+### 2023 — a 1:1 r3f port
 
-The event system was ported from r3f: the `interaction` array, `eventCount`, and a single `onPointerMissed` (canvas + per-object). Early work stayed inside that model — `vorth/pointer-missed` (#8, May 2023), a Dec 2023 `onPointerMissed` bugfix.
+solid-three began as a close port of r3f, down to the `solid-zustand` store: the `interaction` array, `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble (`src/core/events.ts` carries r3f's bubble loop verbatim). Early work stayed inside that port — `vorth/pointer-missed` (#8, May 2023), a Dec 2023 `onPointerMissed` bugfix. (This architecture still lives on `main`.)
 
-### 2024 — tree bubbling
+### 2024 — a from-scratch rewrite re-adds bubbling
 
-`add event-bubbling` (Apr 2024) made events propagate up the hit object's ancestor chain.
+The current solid-three does **not** descend from that port; it descends from a later, from-scratch rewrite (the flat `src/` layout, no `zustand`) that re-implemented the event system. `add event-bubbling` (Apr 2024, on the rewrite's `src/events.ts`) re-added **ancestor (tree) bubbling** — which the _original_ port had had all along. Until then the rewrite propagated only along the ray (objects stacked _behind_ the hit, governed by `stopPropagation`), not up the parent chain. So this entry is the lineage re-establishing r3f's semantics piecemeal — not r3f, or solid-three, introducing anything new.
 
 ### Aug 2025 — the `*Missed` era, the first deliberate redesign
 
