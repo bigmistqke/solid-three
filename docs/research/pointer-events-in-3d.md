@@ -108,33 +108,65 @@ The DOM and pmndrs propagate along **ancestry only** (closest hit, then bubble);
 
 ## The miss — how a target learns a click didn't land on it
 
-The negative signal: code learning that a click did _not_ land on a given target. It has two levels — the **void** (canvas-level: the click hit _nothing_, empty space — the deselect case) and per-object **"not-me"** (the click hit _something else_). "The void" names only the canvas-level half; "the miss" is the whole axis. (The deep mechanics of the per-object miss — and what solid-three should do about it — get their own section later; here we just place each framework.)
+The negative signal — code learning that a click did _not_ land on a given target. It has **two levels**:
+
+- **the void** — canvas-level: the click hit _nothing_ (empty space). This is the deselect case.
+- per-object **"not-me"** — the click hit _something else_ (another object).
+
+"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one — its mechanics are the deep-dive at the end of this section. First, each framework.
 
 ### DOM
 
-No native miss. The void is read off the target: the background element is always a target, so `event.target === container` _is_ the void. There is no per-object "not-me" — selection is centralised (a click bubbles to a container and you inspect `target`), not pushed out to each object.
+No native miss — neither level is a fired event.
+
+- **the void:** read off the target. The background element is always a target, so `event.target === container` _is_ the void.
+- **not-me:** none. Selection is centralised — a click bubbles to a container and you inspect `target`, rather than pushing a signal out to each object.
 
 ### react-three-fiber
 
-**Both levels.** A canvas-level `onPointerMissed` callback fires on a total miss; per-object `onPointerMissed` fires as the _complement_ of the hit set — every interactive object that was not hit. Both are a non-propagating pass over `internal.interaction`; they ignore `stopPropagation`.
+**Both levels**, both via `onPointerMissed`:
+
+- **the void:** the canvas-level `onPointerMissed` callback fires on a total miss.
+- **not-me:** per-object `onPointerMissed` fires as the _complement_ of the hit set — every interactive object that was not hit.
+
+Both are a non-propagating pass over `internal.interaction`; they ignore `stopPropagation`.
 
 ### TresJS / @pmndrs/pointer-events
 
-**Canvas-level only**, via the VoidObject — a giant synthetic sphere parented to the scene that the ray "hits" when nothing real is hit; the miss is an ordinary `click` on it. Because the VoidObject is a single global object, it can only report "the _scene_ was missed" — there is no per-object form. (Verified: `pointerMissed` is absent from TresJS's per-object `supportedPointerEvents` allow-list, so a `@pointermissed` written on an object is silently dropped; it exists only as a `<TresCanvas>` event.)
+**Canvas-level only.**
+
+- **the void:** the VoidObject — a giant synthetic sphere parented to the scene that the ray "hits" when nothing real is hit; the miss is an ordinary `click` on it.
+- **not-me:** none. The VoidObject is one global object, so it can only report "the _scene_ was missed".
+
+(Verified: `pointerMissed` is absent from TresJS's per-object `supportedPointerEvents` allow-list, so a `@pointermissed` written on an object is silently dropped — it exists only as a `<TresCanvas>` event.)
 
 ### Threlte
 
-**Per-object only.** It keeps r3f's per-object complement (`onpointermissed` fires on every registered object not hit) and drops the canvas-level callback — there is no canvas signal and no VoidObject. Deselect means putting `onpointermissed` on the selectable object itself.
+**Per-object only.**
+
+- **the void:** none — no canvas signal, no VoidObject.
+- **not-me:** per-object `onpointermissed` (r3f's complement) fires on every registered object not hit.
+
+Deselect therefore means putting `onpointermissed` on the selectable object itself.
 
 ### Where they land
 
 #### The level is forced by the representation
 
-r3f is the only one that paid for both levels. A VoidObject is one global object, so it can only report "the _scene_ was missed" → canvas-only (TresJS). The per-object complement is per-object by construction, with a canvas total-miss available only as a bolt-on → Threlte keeps the per-object half and drops the bolt-on. So the two r3f descendants each inherited the _opposite_ half.
+r3f is the only one that paid for both levels — because each representation _forces_ a level:
+
+- a **VoidObject** is one global object, so it can only ever report "the _scene_ was missed" → **canvas-only** (TresJS).
+- a **per-object complement** is per-object by construction; a canvas total-miss is only an optional bolt-on → Threlte keeps the per-object half and drops the bolt-on.
+
+So the two r3f descendants each inherited the _opposite_ half.
 
 #### Delivery: at most one dedicated canvas handler
 
-The canvas-level 3D handler each system provides is singular and dedicated — wired only to the miss, never a general-purpose canvas handler. r3f: one dedicated `onPointerMissed` (a plain `<Canvas onClick>` is DOM). TresJS: one dedicated `@pointermissed` (`<TresCanvas>` forwards the rest of the pointer set, but those are native DOM). Threlte: none.
+The canvas-level 3D handler each system provides is singular and dedicated — wired only to the miss, never a general-purpose canvas handler:
+
+- **r3f:** one dedicated `onPointerMissed` (a plain `<Canvas onClick>` is DOM).
+- **TresJS:** one dedicated `@pointermissed` (`<TresCanvas>` forwards the rest of the pointer set, but those are native DOM).
+- **Threlte:** none.
 
 #### The miss and occlusion axes are not independent
 
