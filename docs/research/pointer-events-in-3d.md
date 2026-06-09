@@ -38,10 +38,7 @@ A handful of terms are used precisely throughout:
 - **catch-all** — an object that catches the pointer ray: the ray stops at it (it's in the set of objects the ray is tested against). Purely about whether the pointer stops here — nothing to do with rendering (a visually transparent mesh can still be a catch-all). By default the 3D libs make only handler-bearing objects catch-alls; the DOM makes all geometry a catch-all.
 - **pass-through** — the opposite of a catch-all: the ray goes straight through the object, as if it weren't there.
 - **occlusion** — the axis of _which objects catch the pointer_ (and so block the ray from things behind them).
-- **propagation** — the axis of _how a hit becomes handler calls_: which handlers fire, and in what order. Three motions recur:
-  - **ancestor bubbling** — the event travels _up the hit object's parent chain_ (as in the DOM).
-  - **z-depth tunnelling** — the event travels _back through the objects stacked behind_ the hit, nearest first.
-  - **closest-hit** — only the nearest object is delivered to; no tunnelling.
+- **propagation** — the axis of _how a hit becomes handler calls_: which handlers fire, and in what order. There are two directions an event can travel from a hit: **ancestor bubbling** (up the hit object's parent chain, as in the DOM) and **z-depth tunnelling** (back through the objects stacked _behind_ the hit, nearest first). Every system here bubbles up ancestors and varies only on whether it _also_ tunnels through depth. **closest-hit** is just the name for the no-tunnelling case: only the nearest object, then its ancestors.
 - **the miss** — the axis of _how code learns a click didn't land on a target_. Two levels: **the void** (clicked empty space — nothing hit) and per-object **"not-me"** (clicked some _other_ object).
 - **union vs per-type** — _union_: one handler makes an object a catch-all — it catches every gesture. _per-type_: an object catches only the gestures it actually handles (not a catch-all).
 - **subtree delegation** — a handler on a parent makes its whole subtree catch the pointer; a click on a handler-less child fires the parent.
@@ -93,7 +90,7 @@ All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handl
 
 ## Propagation — how a hit becomes handler calls
 
-Once the ray hits something, whose handlers fire, in what order, and what `stopPropagation` stops. Three shapes recur: (a) **ancestor bubbling** — up the hit object's parent chain; (b) **z-depth tunnelling** — each stacked intersection front-to-back; (c) **closest-hit-only** — just the nearest object. The trap: "it bubbles like the DOM" conflates (a) and (b). They're different motions — up the tree versus back through depth.
+Once the ray hits something, whose handlers fire, in what order, and what `stopPropagation` stops. An event can travel two ways from a hit: **ancestor bubbling** — up the hit object's parent chain — and **z-depth tunnelling** — back through the objects stacked _behind_ the hit, nearest first. Every system here bubbles up ancestors; the one thing that varies is whether it _also_ tunnels through depth. A system that doesn't — nearest object, then its ancestors, nothing behind — is **closest-hit** (ancestor bubbling with no tunnelling). The trap: "it bubbles like the DOM" hears _ancestor bubbling_ and assumes that's all there is, missing the z-depth tunnelling that r3f and Threlte add on top.
 
 ### DOM
 
