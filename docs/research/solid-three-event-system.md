@@ -2,7 +2,7 @@
 
 > Companion to [Pointer events in 3D](./pointer-events-in-3d.md), which maps the design space — occlusion, propagation, the miss — across the DOM, react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte. Read that first; this document reuses its vocabulary (the void, catch-all / pass-through, the r3f and pmndrs/tres camps) without re-deriving it — except _per-type vs union_, which is solid-three's own deviation and is defined below.
 
-solid-three's pointer-event system was built the way most are: ported from react-three-fiber, then rewritten and re-rewritten — each time _without_ the design-space analysis the companion document lays out. This chronology records what the semantics actually _were_ at each stage, and the behaviour that _emerged_ from those rebuilds: some of it chosen deliberately, some of it not — most starkly, a regression nobody intended. It is the case study for why mapping the space first is worth doing.
+solid-three's pointer-event system was built the way most are: ported from react-three-fiber, then rewritten and re-rewritten — each time _without_ the design-space analysis the companion document lays out. This chronology records what the semantics actually _were_ at each stage, and the behaviour that _emerged_ from those rebuilds: some of it chosen deliberately, some of it not — most starkly, an occlusion flip nobody intended or noticed. It is the case study for why mapping the space first is worth doing.
 
 Commit hashes and dates below are from the un-squashed history (`next-dirty`).
 
@@ -33,13 +33,13 @@ Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an 
 
 Was this _better_? Not clearly — arguably not at all. Union's behaviour (a click on a visible `onWheel` object is a hit, so it doesn't deselect) is a defensible default; per-type lets clicks fall _through_ objects that don't happen to handle them, which can surprise just as much the other way. Per-type's one clear edge is performance: each gesture raycasts only its own, smaller bucket, not every handler-bearing object. Either way, nobody had decided it — and an undecided behaviour is an easily-lost one. The next section is how.
 
-## Jun 2026 — #66, the source-agnostic refactor (the regression)
+## Jun 2026 — #66, the source-agnostic refactor (a silent occlusion flip)
 
 `#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases. As collateral, it **collapsed the per-gesture registries back into one** — every handler object went into a single `eventRegistry` again, regardless of gesture (`addEventListener(object, _type)` now ignores `_type`).
 
-That's the union model from the previous section. Click box B again and `deselect()` silently stops firing — B is back to eating the click. Changing occlusion wasn't the goal; the collapse served source-agnosticism, and flipped per-type → union as a side effect.
+That flipped occlusion back to union (the model from the previous section): click the `onWheel` box and `deselect()` no longer fires. Changing occlusion wasn't the goal — the collapse served source-agnosticism, and the flip was a side effect.
 
-No test caught it — the suite pinned _which registry_ an object lands in (routing), not _what happens when you click_ (behaviour). This is the **emergent regression**: a behaviour change nobody chose, invisible because nothing tested behaviour.
+The point isn't that union is worse than per-type — it's that a whole axis of behaviour changed and **nothing noticed**. No test caught it: the suite pinned _which registry_ an object lands in (routing), not _what happens when you click_ (behaviour). Occlusion flipped invisibly, on a refactor that wasn't even about occlusion.
 
 ## Jun 2026 — #69 / #72, capture and typing
 
@@ -59,7 +59,7 @@ Two **unmerged** branches (both 2026-06-08) propose replacing `*Missed` — _par
 
 #75's `onVoid*` family matches the prior-art convention of a dedicated canvas miss handler (`onPointerMissed`, `@pointermissed`). #76's `event.object` reading has no prior-art precedent — it works only because solid-three wires `<Canvas>` handlers into the pointer system (see _Threads_).
 
-The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals the `onWheel` asymmetry still stands.
+The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals an `onWheel` object still catches clicks (union).
 
 ## Deselection — the two shapes
 
@@ -110,7 +110,7 @@ In a reactive renderer the centralized shape is cheap and idiomatic, which is wh
 
 ## Threads through this history
 
-- **The regression is the cautionary tale.** #66's per-type → union flip was invisible because the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (does clicking an `onWheel` object suppress the miss). The exhaustive test pass should assert behaviour.
+- **The silent flip is the cautionary tale.** #66 changed occlusion (per-type → union) and nothing noticed — the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (does clicking an `onWheel` object still fire the miss). The exhaustive test pass should assert behaviour.
 - **solid-three is the only one of the four with general canvas-level 3D handlers.** Its `<Canvas onClick>` (and every canvas pointer prop) is wired into the pointer system — a `context.props` callback fired after bubbling, carrying `event.object` (undefined on a void). r3f's and TresJS's `<Canvas onClick>` are plain DOM; Threlte has no canvas handler at all. That property is what makes #76's `event.object` model expressible — and it's unprecedented in the prior art.
 - **Object override is opt-out only**, via a `raycastable={false}` prop (r3f's counterpart is `raycast={null}`) — like r3f, there's no way to opt a handler-less object _in_.
 - **Event raycasting de-dups on targets, not results.** r3f raycasts each handler object's subtree separately, then de-dups the hits (`intersectObject(obj, true)` per root, then a `Set` of ids) — so overlapping subtrees are ray-tested more than once and the duplicates are thrown away _after_ the work is done. solid-three instead collects the registry into one de-duplicated set (`castRegistry`) and runs a single non-recursive pass, so each mesh is intersected once. Under deeply nested interactive hierarchies that avoids the repeated ray-vs-geometry work; on flat scenes (no overlapping handler subtrees) it's a wash. The saving is mechanical — not benchmarked here.

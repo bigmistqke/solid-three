@@ -202,7 +202,7 @@ The canvas-level 3D handler each system provides is singular and dedicated — w
 
 #### The miss and occlusion axes are not independent
 
-Because any single handler makes an object catch _every_ gesture, an unrelated handler (`onWheel`) still suppresses the void — the object counts as a hit even though nothing consumes the click. No miss _representation_ fixes that; only an occlusion-level change (making that object not catch clicks) would, and none of the prior art offers one.
+Because any single handler makes an object catch _every_ gesture, clicking an object whose only handler is `onWheel` counts as a hit — so the void doesn't fire, whichever miss _representation_ you use. Only an occlusion-level change (making that object not catch clicks) would change that, and none of the prior art offers one.
 
 ### Where `onPointerMissed` came from (in r3f)
 
@@ -249,7 +249,7 @@ Five concrete scenes, across the DOM and the prior art (solid-three's behaviour 
 ```
 
 - DOM: no analogue — there's no per-event-type interactivity.
-- r3f / TresJS / Threlte: any handler makes the object interactive for _every_ gesture, so the click "hits" it. It has no `onClick`, so nothing runs — but the click is consumed: the canvas miss is suppressed (r3f, TresJS), and the object counts as hit everywhere. An unrelated handler silently eats the click.
+- r3f / TresJS / Threlte: any handler makes the object interactive for _every_ gesture, so the click "hits" it. It has no `onClick`, so nothing runs — but it still counts as a hit, so the canvas miss doesn't fire (r3f, TresJS). Any handler is enough to register the object as clicked, even by a gesture it doesn't handle.
 
 **3. A handler-less child inside a handler-bearing parent.**
 
@@ -287,7 +287,7 @@ Five concrete scenes, across the DOM and the prior art (solid-three's behaviour 
 The front box catches the click everywhere (union — its `onWheel` makes it hittable by _every_ gesture), but it has no `onClick`. The question is whether the click still reaches the box behind it.
 
 - r3f / Threlte (depth-tunnel): yes — the ray tunnels past the front box, and the back `onClick` **fires**.
-- TresJS / pmndrs (closest-hit): no — only the nearest hit (the front box) is considered, the back box is never visited, and its `onClick` **doesn't fire**. The unrelated `onWheel` silently blocks it.
+- TresJS / pmndrs (closest-hit): no — only the nearest hit (the front box) is considered, the back box is never visited, and its `onClick` **doesn't fire**. The front `onWheel` box is the dominant hit, so the click stops there.
 - DOM: like closest-hit — the front element is the topmost target, and a click on it bubbles up its _ancestors_, never to the element behind.
 - Scenarios 2 and 4 combined: an unrelated handler is a catch-all under union, and under closest-hit that catch-all blocks whatever sits behind it — exactly what depth-tunnelling would have reached.
 
