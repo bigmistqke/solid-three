@@ -22,7 +22,7 @@ But the taxonomy is in service of one concrete question — the reason this docu
 
 ## How this document is organised
 
-Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; the miss axis closes by turning to the design need under `onPointerMissed`: deselection. solid-three's own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
+Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; its own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
 
 The three axes:
 
@@ -137,7 +137,7 @@ The negative signal — code learning that a click did _not_ land on a given tar
 - **the void** — canvas-level: the click hit _nothing_ (empty space). This is the deselect case.
 - per-object **"not-me"** — the click hit _something else_ (another object).
 
-"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one — what `onPointerMissed` really is, and the design need under it, close the section. First, each framework.
+"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one. First, each framework.
 
 ### DOM
 
@@ -203,53 +203,6 @@ The canvas-level 3D handler each system provides is singular and dedicated — w
 #### The miss and occlusion axes are not independent
 
 Because any single handler makes an object catch _every_ gesture, an unrelated handler (`onWheel`) still suppresses the void — the object counts as a hit even though nothing consumes the click. No miss _representation_ fixes that; only an occlusion-level change (making that object not catch clicks) would, and none of the prior art offers one.
-
-### The deselection need underneath
-
-`onPointerMissed` isn't an event in the propagation sense — it doesn't begin at a hit and travel, and `stopPropagation` doesn't touch it. It's a non-propagating signal that fires on every interactive object the click did _not_ land on: the two levels at once — **the void** (nobody was hit, so every object fires) and **not-me** (something else was hit, so every object but that one fires).
-
-Strip the mechanism away and the need it serves is **deselection**. There are two shapes for it. With `onPointerMissed`, it's _decentralized_ — each selectable object owns a boolean and listens for "not-me":
-
-```jsx
-function Selectable() {
-  const [selected, setSelected] = createSignal(false)
-  return (
-    <Box
-      onClick={e => {
-        e.stopPropagation()
-        setSelected(true)
-      }}
-      onPointerMissed={() => setSelected(false)}
-    />
-  )
-}
-```
-
-The selection state is then spread across the scene, and every selectable object has to be checked on every click.
-
-The same need can also be _centralized_ — **one signal, cleared by the void:**
-
-```jsx
-const [selected, setSelected] = createSignal()
-
-// selecting is a positive click; the void deselects
-<Canvas onPointerDown={e => { if (!e.object) setSelected(undefined) }}>
-  <Box onPointerDown={e => { e.stopPropagation(); setSelected("a") }} />
-  <Box onPointerDown={e => { e.stopPropagation(); setSelected("b") }} />
-</Canvas>
-
-// each box re-derives its own state — no "not-me" notification needed:
-const isSelectedA = () => selected() === "a"
-```
-
-In this shape the "not-me" notification isn't needed: box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is set by a positive click (with `stopPropagation`); deselection is the void clearing the signal.
-
-The two shapes have different properties:
-
-- **decentralized** — scatters selection state across objects; every selectable object is checked on each click.
-- **centralized** — concentrates state in one signal and leans on the void.
-
-Which fits a given app is a design choice, not something this document settles.
 
 ### Where `onPointerMissed` came from (in r3f)
 

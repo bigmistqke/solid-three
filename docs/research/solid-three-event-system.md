@@ -35,6 +35,53 @@ Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, 
 
 The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals the `onWheel` asymmetry still stands.
 
+## Deselection — the two shapes
+
+`*Missed` exists to serve one need: **deselection**. It has two shapes, and which one an app uses decides whether per-object "not-me" is needed at all.
+
+**Decentralized** — each selectable object owns a boolean and listens for its own miss via `*Missed`:
+
+```jsx
+function Selectable() {
+  const [selected, setSelected] = createSignal(false)
+  return (
+    <Box
+      onClick={e => {
+        e.stopPropagation()
+        setSelected(true)
+      }}
+      onClickMissed={() => setSelected(false)}
+    />
+  )
+}
+```
+
+Selection state is scattered across the scene, and every selectable object is checked on each click.
+
+**Centralized** — one signal, cleared by the void. solid-three's `event.object` (undefined on a void) plus Solid reactivity make this the natural shape:
+
+```jsx
+const [selected, setSelected] = createSignal()
+
+// selecting is a positive click; the void deselects
+<Canvas onPointerDown={e => { if (!e.object) setSelected(undefined) }}>
+  <Box onPointerDown={e => { e.stopPropagation(); setSelected("a") }} />
+  <Box onPointerDown={e => { e.stopPropagation(); setSelected("b") }} />
+</Canvas>
+
+// each box re-derives its own state — no "not-me" notification needed:
+const isSelectedA = () => selected() === "a"
+```
+
+Here box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is a positive click (with `stopPropagation`); deselection is the void clearing the signal — and the per-object "not-me" notification isn't needed.
+
+The two shapes trade off:
+
+- **decentralized** — scatters selection state across objects; every selectable object is checked on each click. Needs per-object "not-me".
+- **centralized** — concentrates state in one signal and leans on the void. Needs only the void.
+
+In a reactive renderer the centralized shape is cheap and idiomatic, which is what makes a void-only model (both fork proposals) viable. Whether per-object "not-me" is still worth keeping for the decentralized case is the open question below.
+
 ## Threads through this history
 
 - **The regression is the cautionary tale.** #66's per-type → union flip was invisible because the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (does clicking an `onWheel` object suppress the miss). The exhaustive test pass should assert behaviour.
