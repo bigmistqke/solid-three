@@ -18,7 +18,7 @@ The rewrite also changed occlusion — though no commit says so. Its `eventRegis
 
 ## Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-A burst of same-day commits (2025-08-04) brought the miss back — and split it per gesture. `onPointerMissed` (dropped in the rewrite) returned as `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object a click _didn't_ land on — so a selectable object can hear "something else was clicked" and deselect itself (see _Deselection_, below). Unlike r3f's miss, these respect `stopPropagation`. The same pass (`a0ffc80f`) regrouped the registries by behaviour (missable / movable / default) but kept them keyed per type.
+A burst of same-day commits (2025-08-04) brought the miss back — and split it per gesture. `onPointerMissed` (dropped in the rewrite) returned as `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object a click _didn't_ land on — so a selectable object can hear "something else was clicked" and deselect itself (see [Deselection in solid-three](./deselection-in-solid-three.md)). Unlike r3f's miss, these respect `stopPropagation`. The same pass (`a0ffc80f`) regrouped the registries by behaviour (missable / movable / default) but kept them keyed per type.
 
 `*Missed` is also what made solid-three's **per-type occlusion** — in place since the 2024 rewrite — finally observable. Click the second box:
 
@@ -70,53 +70,6 @@ Two **unmerged** branches (both 2026-06-08) propose replacing `*Missed` — _par
 
 The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals an `onWheel` object still catches clicks (union).
 
-## Deselection — the two shapes
-
-`*Missed` exists to serve one need: **deselection**. It has two shapes, and which one an app uses decides whether per-object "not-me" is needed at all.
-
-**Decentralized** — each selectable object owns a boolean and listens for its own miss via `*Missed`:
-
-```jsx
-function Selectable() {
-  const [selected, setSelected] = createSignal(false)
-  return (
-    <Box
-      onClick={e => {
-        e.stopPropagation()
-        setSelected(true)
-      }}
-      onClickMissed={() => setSelected(false)}
-    />
-  )
-}
-```
-
-Selection state is scattered across the scene, and every selectable object is checked on each click.
-
-**Centralized** — one signal, cleared by the void. Unlike the other three frameworks, solid-three wires `<Canvas>` handlers into the pointer system (see _Threads_, below), so a canvas handler carries `event.object` — `undefined` on a void. With Solid reactivity, that makes this the natural shape:
-
-```jsx
-const [selected, setSelected] = createSignal()
-
-// selecting is a positive click; the void deselects
-<Canvas onPointerDown={e => { if (!e.object) setSelected(undefined) }}>
-  <Box onPointerDown={e => { e.stopPropagation(); setSelected("a") }} />
-  <Box onPointerDown={e => { e.stopPropagation(); setSelected("b") }} />
-</Canvas>
-
-// each box re-derives its own state — no "not-me" notification needed:
-const isSelectedA = () => selected() === "a"
-```
-
-Here box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is a positive click (with `stopPropagation`); deselection is the void clearing the signal — and the per-object "not-me" notification isn't needed.
-
-The two shapes trade off:
-
-- **decentralized** — scatters selection state across objects; every selectable object is checked on each click. Needs per-object "not-me".
-- **centralized** — concentrates state in one signal and leans on the void. Needs only the void.
-
-In a reactive renderer the centralized shape is cheap and idiomatic, which is what makes a void-only model (both fork proposals) viable. Whether per-object "not-me" is still worth keeping for the decentralized case is the open question below.
-
 ## Threads through this history
 
 - **The silent flip is the cautionary tale.** #66 changed occlusion (per-type → union) and nothing noticed — the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (does clicking an `onWheel` object still fire the miss). The exhaustive test pass should assert behaviour.
@@ -137,4 +90,4 @@ In a reactive renderer the centralized shape is cheap and idiomatic, which is wh
 
 - _Propagation._ Keep r3f-style z-depth tunnelling, or move to closest-hit-only like `@pmndrs/pointer-events`?
 - _Override._ Stay opt-out-only (`raycastable`), or add a per-object `pointerEvents`-style control (pmndrs is the only prior art with one)?
-- _Miss model._ Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void; and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
+- _Miss model._ Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void (see [Deselection in solid-three](./deselection-in-solid-three.md)); and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
