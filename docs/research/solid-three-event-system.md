@@ -37,7 +37,16 @@ Was this _better_? Not clearly — arguably not at all. Union's behaviour (a cli
 
 `#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases. As collateral, it **collapsed the per-gesture registries back into one** — every handler object went into a single `eventRegistry` again, regardless of gesture (`addEventListener(object, _type)` now ignores `_type`).
 
-That flipped occlusion back to union (the model from the previous section): click the `onWheel` box and `deselect()` no longer fires. Changing occlusion wasn't the goal — the collapse served source-agnosticism, and the flip was a side effect.
+That flipped occlusion back to union — the same scene now behaves the old way:
+
+```jsx
+<Canvas onClickMissed={() => deselect()}>
+  <Box onClick={...} />   // A — handles clicks
+  <Box onWheel={...} />   // B — handles the wheel, nothing else
+</Canvas>
+```
+
+Click B: it catches the click again (any handler makes an object hittable by every gesture), the canvas sees a hit rather than a miss, and `deselect()` no longer fires. Changing occlusion wasn't the goal — the collapse served source-agnosticism, and the flip was a side effect.
 
 The point isn't that union is worse than per-type — it's that a whole axis of behaviour changed and **nothing noticed**. No test caught it: the suite pinned _which registry_ an object lands in (routing), not _what happens when you click_ (behaviour). Occlusion flipped invisibly, on a refactor that wasn't even about occlusion.
 
