@@ -40,15 +40,13 @@ A handful of terms are used precisely throughout:
 - **occlusion** — the axis of _which objects catch the pointer_ (and so block the ray from things behind them).
 - **propagation** — the axis of _how a hit becomes handler calls_: which handlers fire, and in what order. There are two directions an event can travel from a hit: **ancestor bubbling** (up the hit object's parent chain, as in the DOM) and **z-depth tunnelling** (back through the objects stacked _behind_ the hit, nearest first). Every system here bubbles up ancestors and varies only on whether it _also_ tunnels through depth. **closest-hit** is just the name for the no-tunnelling case: only the nearest object, then its ancestors.
 - **the miss** — the axis of _how code learns a click didn't land on a target_. Two levels: **the void** (clicked empty space — nothing hit) and per-object **"not-me"** (clicked some _other_ object).
-- **union vs per-type** — _union_: one handler makes an object a catch-all — it catches every gesture. _per-type_: an object catches only the gestures it actually handles (not a catch-all).
 - **subtree delegation** — a handler on a parent makes its whole subtree catch the pointer; a click on a handler-less child fires the parent.
 - **complement set** — the interactive objects a click did _not_ hit: everything except what was clicked. (The per-object "missed" event, introduced later, fires on exactly this set.)
 
 ## Occlusion — which objects stop the ray?
 
-Given a ray, which objects are even candidates to be hit — which objects are a **catch-all** for the pointer vs **pass-through**. Three sub-questions sharpen it:
+Given a ray, which objects are even candidates to be hit — which objects are a **catch-all** for the pointer vs **pass-through**. Two sub-questions sharpen it:
 
-- **per-type vs union:** if an object handles one gesture (`wheel`), does it catch _other_ gestures (`click`) too?
 - **override:** can you flip the per-object default — a handler-less object made a catch-all, or a handler-bearing one made pass-through?
 - **subtree delegation:** does a handler-less _child_ of a handler-bearing parent catch the pointer?
 
@@ -56,7 +54,6 @@ Given a ray, which objects are even candidates to be hit — which objects are a
 
 All geometry catches the pointer — handlers are irrelevant to hit-testing (the browser tests geometry plus the `pointer-events` CSS property), so a handler-less element still stops the pointer.
 
-- **Per-type or union?** N/A — an element catches every gesture, or (with `pointer-events: none`) none; there's no per-gesture distinction.
 - **Override?** Full, per element — `pointer-events: auto | none`.
 - **Subtree?** Yes — every element is a catch-all, and delegation runs up the ancestor chain.
 
@@ -64,7 +61,6 @@ All geometry catches the pointer — handlers are irrelevant to hit-testing (the
 
 Only objects with at least one handler catch the pointer — adding a handler bumps an internal counter (`eventCount`) above zero, which puts the object in the list the ray is tested against (`internal.interaction`); a handler-less mesh is pass-through.
 
-- **Per-type or union?** Union — one handler of _any_ type catches every gesture (an `onWheel`-only box still stops a `click`).
 - **Override?** Opt-out only — `raycast={null}` makes a handler-bearing object pass-through; there's no way to opt a handler-less one _in_.
 - **Subtree?** Caught — the ray test is recursive, so a handler-less child inside a handler-bearing parent is swept in and its clicks delegate up to the parent.
 
@@ -72,7 +68,6 @@ Only objects with at least one handler catch the pointer — adding a handler bu
 
 Only objects with a listener catch the pointer by default; a handler-less mesh is pass-through.
 
-- **Per-type or union?** Union — any listener makes the object a catch-all.
 - **Override?** Full, per object — `pointerEvents: 'auto' | 'listener' | 'none'` (`'auto'` = catch-all without a handler, `'none'` = pass-through with one). The only system that matches the DOM here, though in TresJS it's surfaced only incidentally (the raw property is assigned onto the object), not a typed/documented API.
 - **Subtree?** Caught — an "is interactive" flag propagates down the tree, so descendants of a handler-bearing object are tested.
 
@@ -80,13 +75,12 @@ Only objects with a listener catch the pointer by default; a handler-less mesh i
 
 Only handler-bearing objects catch the pointer (an explicit `interactiveObjects` list); a handler-less mesh is pass-through.
 
-- **Per-type or union?** Union — one handler makes the object a hit-target for all event types.
 - **Override?** Global only — a single `filter(hits)` function, with no per-object flag and no way to opt a handler-less object _in_.
 - **Subtree?** Caught — the ray test is recursive over the interactive list and its descendants.
 
 ### Where they land
 
-All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **union** (any handler → catch-all — no prior-art system does _per-type_; catching only some gestures is a road solid-three alone took — see its [chronology](./solid-three-event-system.md)) and on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
+All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
 
 ## Propagation — how a hit becomes handler calls
 
@@ -144,20 +138,19 @@ The canvas-level 3D handler each system provides is singular and dedicated — w
 
 #### The miss and occlusion axes are not independent
 
-In any **union**-occlusion system, an unrelated handler (`onWheel`) still suppresses the void, because the object counts as a hit. No miss _representation_ fixes that — only the _occlusion_ choice (per-type) does.
+Because any single handler makes an object catch _every_ gesture, an unrelated handler (`onWheel`) still suppresses the void — the object counts as a hit even though nothing consumes the click. No miss _representation_ fixes that; only an occlusion-level change (making that object not catch clicks) would, and none of the prior art offers one.
 
 ## The landscape, at a glance
 
 | Axis                               | DOM                                        | react-three-fiber                              | TresJS / `@pmndrs/pointer-events`                                                       | Threlte                                                                |
 | ---------------------------------- | ------------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | **Occlusion** of no-handler object | catch-all (still a target)                 | pass-through (implicit `pointer-events: none`) | pass-through by default (`pointerEvents: 'listener'`), per-object overridable           | pass-through (explicit `interactiveObjects` list)                      |
-| **Per-type vs union**              | n/a (all-or-nothing)                       | union (any handler → catch-all)                | union (any listener → catch-all; `pointerEvents` is per-object, not per-type)           | union (one handler → hit-target for all types)                         |
 | **Override** (opt-in / opt-out)    | full: `pointer-events: auto \| none`       | opt-out only (`raycast={null}`)                | full: `pointerEvents: auto \| listener \| none` (via the pmndrs layer, not first-class) | global `filter(hits)` only                                             |
 | **Subtree delegation**             | yes (geometry + ancestry)                  | yes (recursive raycast)                        | yes (`parentHasListener`)                                                               | yes (recursive raycast)                                                |
 | **Propagation**                    | ancestors only                             | z-depth tunnel + ancestor bubble               | **closest hit only** + ancestor bubble                                                  | z-depth tunnel + ancestor bubble                                       |
 | **The miss**                       | none native (read `target === background`) | `onPointerMissed`: canvas **and** per-object   | VoidObject (canvas-level only); a positive hit on a synthetic sphere                    | per-object `onpointermissed` **only** — no canvas-level, no VoidObject |
 
-Two clusters fall out of it. **r3f and Threlte are nearly the same system** — union occlusion, z-depth-tunnel + ancestor-bubble propagation, per-object `onPointerMissed` (their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops). `@pmndrs/pointer-events` (and thus TresJS) is the real outlier: closest-hit-only propagation, the VoidObject, and the only true per-object override. So the "mainstream 3D" model is r3f's, and pmndrs is the one genuine alternative — and it's also the most DOM-faithful on every axis (closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property).
+Two clusters fall out of it. **r3f and Threlte are nearly the same system** — z-depth-tunnel + ancestor-bubble propagation and per-object `onPointerMissed` (their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops). `@pmndrs/pointer-events` (and thus TresJS) is the real outlier: closest-hit-only propagation, the VoidObject, and the only true per-object override. So the "mainstream 3D" model is r3f's, and pmndrs is the one genuine alternative — and it's also the most DOM-faithful on every axis (closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property).
 
 ## Where the confusion comes from
 
@@ -194,7 +187,7 @@ Four concrete scenes, across the DOM and the prior art (solid-three's behaviour 
 ```
 
 - DOM: no analogue — there's no per-event-type interactivity.
-- r3f / TresJS / Threlte (all union): the object is interactive for _every_ gesture, so the click "hits" it. It has no `onClick`, so nothing runs — but the click is consumed: the canvas miss is suppressed (r3f, TresJS), and the object counts as hit everywhere. An unrelated handler silently eats the click.
+- r3f / TresJS / Threlte: any handler makes the object interactive for _every_ gesture, so the click "hits" it. It has no `onClick`, so nothing runs — but the click is consumed: the canvas miss is suppressed (r3f, TresJS), and the object counts as hit everywhere. An unrelated handler silently eats the click.
 
 **3. A handler-less child inside a handler-bearing parent.**
 

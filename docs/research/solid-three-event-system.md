@@ -1,6 +1,6 @@
 # solid-three's pointer-event system: a chronology
 
-> Companion to [Pointer events in 3D](./pointer-events-in-3d.md), which maps the design space — occlusion, propagation, the miss — across the DOM, react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte. Read that first; this document reuses its vocabulary (the void, per-type vs union, the r3f / tres poles) without re-deriving it.
+> Companion to [Pointer events in 3D](./pointer-events-in-3d.md), which maps the design space — occlusion, propagation, the miss — across the DOM, react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte. Read that first; this document reuses its vocabulary (the void, catch-all / pass-through, the r3f / tres poles) without re-deriving it — except _per-type vs union_, which is solid-three's own deviation and is defined below.
 
 solid-three's pointer-event system was built the way most are: ported from react-three-fiber, then rewritten and re-rewritten — each time _without_ the design-space analysis the companion document lays out. This chronology records what the semantics actually _were_ at each stage, and the behaviour that _emerged_ from those rebuilds: some of it chosen deliberately, some of it not — most starkly, a regression nobody intended. It is the case study for why mapping the space first is worth doing.
 
@@ -16,7 +16,7 @@ The current solid-three does **not** descend from that port; it descends from a 
 
 ## Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), computed as a _complement set_ — fire on every registered object the ray did _not_ hit, occlusion-correct and `stopPropagation`-aware. The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — the **per-type occlusion** design: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
+A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), computed as a _complement set_ — fire on every registered object the ray did _not_ hit, occlusion-correct and `stopPropagation`-aware. The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — and with them the one place solid-three diverged from every other framework on _occlusion_. Everywhere else is **union**: any single handler makes an object catch _every_ gesture (a box with only `onWheel` still stops a `click`). The per-category registries instead made an object catch only the gestures it actually handled — **per-type**: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
 
 ## Jun 2026 — #66, the source-agnostic refactor (the regression)
 
