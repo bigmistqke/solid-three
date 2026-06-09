@@ -133,7 +133,7 @@ The negative signal — code learning that a click did _not_ land on a given tar
 
 No native miss — neither level is a fired event.
 
-| level        | behaviour                                                                                                     |
+|              | behaviour                                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------------------------- |
 | **the void** | read off the target: the background element is always a target, so `event.target === container` _is_ the void |
 | **not-me**   | none — selection is centralised: a click bubbles to a container and you inspect `target`                      |
@@ -142,7 +142,7 @@ No native miss — neither level is a fired event.
 
 **Both levels**, both via `onPointerMissed`:
 
-| level        | behaviour                                                                |
+|              | behaviour                                                                |
 | ------------ | ------------------------------------------------------------------------ |
 | **the void** | canvas-level `onPointerMissed` fires on a total miss                     |
 | **not-me**   | per-object `onPointerMissed` fires on every interactive object _not_ hit |
@@ -153,7 +153,7 @@ Both are a non-propagating pass over r3f's interactive objects; they ignore `sto
 
 **Canvas-level only.**
 
-| level        | behaviour                                                                                              |
+|              | behaviour                                                                                              |
 | ------------ | ------------------------------------------------------------------------------------------------------ |
 | **the void** | the VoidObject — a synthetic sphere the ray "hits" when nothing real is hit; an ordinary `click` on it |
 | **not-me**   | none — the VoidObject is one global object, so it can only report "the _scene_ was missed"             |
@@ -164,7 +164,7 @@ Both are a non-propagating pass over r3f's interactive objects; they ignore `sto
 
 **Per-object only.**
 
-| level        | behaviour                                                               |
+|              | behaviour                                                               |
 | ------------ | ----------------------------------------------------------------------- |
 | **the void** | none — no canvas signal, no VoidObject                                  |
 | **not-me**   | per-object `onpointermissed` fires on every registered object _not_ hit |
