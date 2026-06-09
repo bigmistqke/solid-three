@@ -10,7 +10,7 @@ There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`),
 
 The core claim of this document: "pointer events" is not one decision but **three independent ones** — _occlusion_, _propagation_, and _the miss_ — and most of the confusion comes from treating them as a single bundle, or from assuming that because a system borrowed the DOM's _words_ it also borrowed the DOM's _behavior_.
 
-But the taxonomy is in service of one concrete question — the reason this document exists: **what is `onPointerMissed` — the one inherited primitive solid-three has redesigned again and again (issue #21, the `*Missed` split, the `onVoid*`/`event.object` fork) — and should it keep it at all?** The thesis, argued through every axis below, is that `onPointerMissed` isn't really an event at all. It's a non-propagating _deselection_ shortcut that bundles two unlike needs: clicking **the void** (empty space), and learning that **something else** was clicked. The void is genuinely 3D-specific and deserves a first-class signal; the per-object "not-me" half is the awkward one, and ordinary centralised selection state replaces it. Occlusion, propagation, and the prior-art tour are the evidence for that call — which is why this isn't a chapter near the end so much as the reason for all the rest.
+But the taxonomy is in service of one concrete question — the reason this document exists: **what is `onPointerMissed`, the one inherited primitive solid-three has redesigned again and again (issue #21, the `*Missed` split, the `onVoid*`/`event.object` fork)?** The analysis below works toward a precise answer to that: `onPointerMissed` isn't really an event at all — it's a non-propagating _deselection_ shortcut that bundles two unlike needs (clicking **the void** — empty space — and learning that **something else** was clicked). Whether solid-three keeps it, and in what form, is a live decision; this document's job is to make the space precise, not to pick.
 
 ## How this document is organised
 
@@ -196,9 +196,9 @@ Four concrete scenes, across the DOM and the prior art (solid-three's behaviour 
 - TresJS / pmndrs (closest-hit): only A fires; B is never considered.
 - This is the sharpest demonstration that "propagation" is two different motions: r3f and Threlte travel _back through depth_; the DOM and pmndrs never do.
 
-## `onPointerMissed`: what it is, and what solid-three should offer instead
+## `onPointerMissed`: what it actually is
 
-Two questions the rest of the doc leads up to: **what is an `onPointerMissed` event, really?** — and, given the answer, **should solid-three implement it, or offer something else for the same job?**
+What _is_ an `onPointerMissed` event, mechanically? The rest of this section answers that — and the short version is that it isn't an event at all. (What solid-three should _do_ about it is left open, in Open questions.)
 
 ### It isn't an event — it's a complement
 
@@ -241,7 +241,7 @@ The property that makes OUTER _eligible_ for a miss (it has a handler) is the sa
 
 ### The problem underneath: deselection
 
-Strip the mechanism away and the real need is just deselection. `onPointerMissed` pushes you toward a _decentralized_ shape — every selectable object owns a boolean and listens for "not-me":
+Strip the mechanism away and the need `onPointerMissed` serves is deselection. There are two shapes for it. With `onPointerMissed`, it's _decentralized_ — each selectable object owns a boolean and listens for "not-me":
 
 ```jsx
 function Selectable() {
@@ -258,9 +258,9 @@ function Selectable() {
 }
 ```
 
-It works, but the selection state is scattered across the scene, every object pays for the complement pass, and each inherits the self-disqualification rule.
+The selection state is then spread across the scene, every object is part of the complement pass, and each is subject to the self-disqualification rule above.
 
-The same problem-space, solved the way Solid already wants — **selection is one signal; the void clears it:**
+The same need can also be _centralized_ — **one signal, cleared by the void:**
 
 ```jsx
 const [selected, setSelected] = createSignal()
@@ -275,47 +275,42 @@ const [selected, setSelected] = createSignal()
 const isSelectedA = () => selected() === "a"
 ```
 
-The "not-me" case _disappears_: box B never needs to be _told_ that A was clicked — it re-derives `selected() === "b"` reactively. Selecting is an ordinary positive click (with `stopPropagation` so it doesn't reach the canvas); deselecting is the void clearing the signal.
+In this shape the "not-me" notification isn't needed: box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is set by a positive click (with `stopPropagation`); deselection is the void clearing the signal. The two shapes have different properties — decentralized scatters state and pays the complement pass; centralized concentrates state and leans on the void — and which fits a given app is a design choice, not something this document settles.
 
-### What solid-three should offer
+### Where it came from (in r3f)
 
-**No to the per-object half; yes to the void.**
-
-- **Per-object "not-me" (`*Missed`) — don't bring it back.** It's the expensive, surprising half: a non-propagating complement pass with the self-disqualification trap, and it nudges users toward decentralized selection state. A centralized signal plus a void event covers everything it did, more clearly. solid-three already dropped it on both void branches — this is the case for keeping it gone.
-- **The void — keep it, first-class.** This is the genuinely 3D-specific need: a DOM page always has a background element to click; a 3D scene has nothing under empty space, so there is no event to read unless the framework manufactures one. The void _signal_ is settled; only its _representation_ is open (the open questions).
-
-The thing to protect is that the void stays _cheap and ergonomic_, because it now carries the whole deselection story `onPointerMissed` used to. Both branches clear that bar: clicking the void is an ordinary canvas-level dispatch (it does not raycast the scene — see the chronology), and `!event.object` or `onVoidPointerDown` is a one-liner.
+`onPointerMissed` entered r3f in two stages, which is why it does two things. The **canvas** form came first (drcmda, 2019-08-06, commit `3871afba`), firing only on a click that hit nothing — the deselect / click-empty-space signal: a 3D click on empty space hits nothing and produces no event, where a DOM page gets the same affordance for free (a background click bubbles to `document`). The **per-object** form was a separate, later addition (drcmda, 2020-12-03, commit `15b348b0`, "allow onPointerMissed on the object level"), firing on a mesh when you click anything but it. r3f's docs and downstream issues motivate the canvas form; the per-object form's rationale is undocumented. (`onPointerMissed` is r3f-original — the earlier `react-three-renderer`, 2015, had no pointer-raycasting at all.)
 
 ## solid-three's event system: a chronology
 
-solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour nobody intended, and the current state isn't one design but a fork between two.
+solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour as an unintended side effect, and the current state isn't one design but a fork between two. (Hashes and dates below are from the un-squashed `next-dirty` history.)
 
 ### 2023 — a 1:1 r3f port
 
-solid-three began as a close port of r3f, down to the `solid-zustand` store: the `interaction` array, `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble (`src/core/events.ts` carries r3f's bubble loop verbatim). Early work stayed inside that port — `vorth/pointer-missed` (#8, May 2023), a Dec 2023 `onPointerMissed` bugfix. (This architecture still lives on `main`.)
+solid-three began as a close port of r3f, down to the `solid-zustand` store: the `interaction` array, `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble (`src/core/events.ts` carries r3f's bubble loop verbatim). `onPointerMissed` arrived via `vorth/pointer-missed` (PR #8, merge `dd794de1`, 2023-05-22; closes issue **#7**), with a follow-up bugfix that December. The later zustand → `solid-js/store` migration (`f8bc3716`, 2023-07-16) left the bubbling untouched. (This port still lives on `main`.)
 
 ### 2024 — a from-scratch rewrite re-adds bubbling
 
-The current solid-three does **not** descend from that port; it descends from a later, from-scratch rewrite (the flat `src/` layout, no `zustand`) that re-implemented the event system. `add event-bubbling` (Apr 2024, on the rewrite's `src/events.ts`) re-added **ancestor (tree) bubbling** — which the _original_ port had had all along. Until then the rewrite propagated only along the ray (objects stacked _behind_ the hit, governed by `stopPropagation`), not up the parent chain. So this entry is the lineage re-establishing r3f's semantics piecemeal — not r3f, or solid-three, introducing anything new.
+The current solid-three does **not** descend from that port; it descends from a separate, from-scratch rewrite (the flat `src/` layout, no `zustand`) that branched off at the PR #8 merge (`dd794de1`) and re-implemented events. `cc02bab4` (2024-04-11) deleted `src/core/events.ts` and added a flat `src/events.ts` with **no bubbling at all**; `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back — re-establishing what the original port had had all along, not introducing anything new. The two lines are genuinely parallel: `git merge-base` confirms the port tip is _not_ an ancestor of the rewrite, and `next` descends from the rewrite, not the port.
 
 ### Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-A burst of same-day commits split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed`, computed as a _complement set_ — fire on every registered object the ray did _not_ hit, tracked via a visited set, occlusion-correct and `stopPropagation`-aware. The same rewrite introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) and a movable/missable/default handler split. This is the **per-type occlusion** design: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
+A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), computed as a _complement set_ — fire on every registered object the ray did _not_ hit, occlusion-correct and `stopPropagation`-aware. The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — the **per-type occlusion** design: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
 
 ### Jun 2026 — #66, the source-agnostic refactor (the regression)
 
-`#66` rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases — and, as collateral, **collapsed the per-category registries into one union `eventRegistry`**. Nobody chose to change occlusion semantics; the collapse served source-agnosticism. But it flipped per-type → union, reintroducing the `onWheel`-suppresses-click-miss asymmetry the per-category design had avoided. No test caught it — the suite pinned registry _routing_, not observable behaviour.
+`#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases — and, as collateral, **collapsed the per-category registries into one union `eventRegistry`** (`addEventListener(object, _type)` now ignores `_type`). Changing occlusion semantics wasn't the goal; the collapse served source-agnosticism. But it flipped per-type → union, reintroducing the `onWheel`-suppresses-click-miss asymmetry the per-category design had avoided. No test caught it — the suite pinned registry _routing_, not observable behaviour.
 
 ### Jun 2026 — #69 / #72, capture and typing
 
-Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` event API (#69); a typed dispatched event replacing the `any` bag (#72); `eventRegistry` extracted into its own refcounted module. The `*Missed` complement-set rode through all of it unchanged. This — union registry + `*Missed` — is what's merged on `next` today.
+Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` event API (#69, `2f321abe`, 2026-06-07); a typed dispatched event replacing the `any` bag (#72, `0c61cbc0`, 2026-06-07). The `*Missed` complement-set rode through both unchanged. This — union registry + `*Missed` — is what's merged on `next` today.
 
 ### Jun 2026 — the void fork (open)
 
-Two branches replace `*Missed`, and they are _parallel proposals_, not a sequence — neither is an ancestor of the other, neither is merged. Both move solid-three off the r3f-shaped `*Missed` (per-object complement, both levels) toward a tres-shaped, void-only model:
+Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, both **unmerged**. They are _parallel proposals_, not a sequence: `git merge-base --is-ancestor` confirms neither is an ancestor of the other. Both move solid-three off the r3f-shaped `*Missed` (per-object complement, both levels) toward a tres-shaped, void-only model:
 
-- **#75 `onVoid*`** (`feat/void-events`): drop `*Missed` for a dedicated `onVoid*` canvas family (`onVoidClick`, `onVoidPointerDown`, …) — a per-gesture void handler, matching the prior-art convention of a dedicated canvas miss handler.
-- **#76 `event.object`** (`feat/void-via-event-object`): drop `*Missed` and detect the void by reading `event.object` (undefined) on the ordinary canvas-level handler — the "general canvas handler carries `event.object`" model.
+- **#75 `onVoid*`** (`feat/void-events`; `d25e9e3d`, `b1671bcb`): drop `*Missed` for a dedicated `onVoid*` canvas family (`onVoidClick`, `onVoidPointerDown`, …) — a per-gesture void handler, matching the prior-art convention of a dedicated canvas miss handler.
+- **#76 `event.object`** (`feat/void-via-event-object`; `dad769e`): drop `*Missed` and detect the void by reading `event.object` (undefined) on the ordinary canvas-level handler — the "general canvas handler carries `event.object`" model.
 
 The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals the `onWheel` asymmetry still stands.
 
@@ -327,10 +322,10 @@ The open question is which void _representation_ wins. Neither restores the per-
 
 ## Open questions
 
-- _Occlusion._ Lean is to restore the pre-`#66` per-type intent. Open sub-question: should a front object that doesn't handle the gesture **block** (no fall-through, and count as a void) or be **pass-through** (fall-through to whatever's behind)? The DOM analogy argues for block-and-count-as-miss.
+- _Occlusion: per-type vs union._ `#66` collapsed per-type into union. Whether to restore per-type is open — and if per-type, whether a front object that doesn't handle the gesture should **block** (no fall-through, count as a void) or be **pass-through** (fall-through to whatever's behind). (The DOM is union-occlusion with no fall-through.)
 - _Propagation._ Keep r3f-style z-depth tunnelling, or move to closest-hit-only like `@pmndrs/pointer-events`?
-- _Override._ Stay opt-out-only (`raycastable`), or add a real per-object `pointerEvents`-style control (the one place pmndrs is clearly ahead)?
-- _Void representation._ The per-object "not-me" question is settled above (drop it). What's left is how the void is delivered: `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach is unprecedented — powerful, but you'd be first.
+- _Override._ Stay opt-out-only (`raycastable`), or add a per-object `pointerEvents`-style control (pmndrs is the only prior art with one)?
+- _Miss model._ Two open parts: (a) whether per-object "not-me" is worth supporting at all, or only the void; and (b) how the void is delivered — `event.object === undefined` on the ordinary canvas handler (#76) vs a dedicated `onVoid*` family (#75). The prior-art _convention_ for the void is a dedicated canvas handler (`onPointerMissed`, `@pointermissed`), which `onVoid*` matches; the `event.object` approach has no prior-art precedent.
 
 ## Sources
 
