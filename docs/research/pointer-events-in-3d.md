@@ -53,29 +53,37 @@ Given a ray, which objects are even candidates to be hit — which objects are a
 
 All geometry catches the pointer — handlers are irrelevant to hit-testing (the browser tests geometry plus the `pointer-events` CSS property), so a handler-less element still stops the pointer.
 
-- **Override?** Full, per element — `pointer-events: auto | none`.
-- **Subtree?** Yes — every element is a catch-all, and delegation runs up the ancestor chain.
+|                        | behaviour                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| **override**           | Full, per element — `pointer-events: auto \| none`.                            |
+| **subtree delegation** | Yes — every element is a catch-all, and delegation runs up the ancestor chain. |
 
 ### react-three-fiber
 
 Only objects with at least one handler catch the pointer — adding a handler bumps an internal counter (`eventCount`) above zero, which puts the object in the list the ray is tested against (`internal.interaction`); a handler-less mesh is pass-through.
 
-- **Override?** Opt-out only — `raycast={null}` makes a handler-bearing object pass-through; there's no way to opt a handler-less one _in_.
-- **Subtree?** Caught — the ray test is recursive, so a handler-less child inside a handler-bearing parent is swept in and its clicks delegate up to the parent.
+|                        | behaviour                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **override**           | Opt-out only — `raycast={null}` makes a handler-bearing object pass-through; there's no way to opt a handler-less one _in_.                       |
+| **subtree delegation** | Caught — the ray test is recursive, so a handler-less child inside a handler-bearing parent is swept in and its clicks delegate up to the parent. |
 
 ### TresJS / @pmndrs/pointer-events
 
 Only objects with a listener catch the pointer by default; a handler-less mesh is pass-through.
 
-- **Override?** Full, per object — `pointerEvents: 'auto' | 'listener' | 'none'` (`'auto'` = catch-all without a handler, `'none'` = pass-through with one). The only system that matches the DOM here, though in TresJS it's surfaced only incidentally (the raw property is assigned onto the object), not a typed/documented API.
-- **Subtree?** Caught — an "is interactive" flag propagates down the tree, so descendants of a handler-bearing object are tested.
+|                        | behaviour                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **override**           | Full, per object — `pointerEvents: 'auto' \| 'listener' \| 'none'` (`'auto'` = catch-all without a handler, `'none'` = pass-through with one). The only system that matches the DOM here, though in TresJS it's surfaced only incidentally (the raw property is assigned onto the object), not a typed/documented API. |
+| **subtree delegation** | Caught — an "is interactive" flag propagates down the tree, so descendants of a handler-bearing object are tested.                                                                                                                                                                                                     |
 
 ### Threlte
 
 Only handler-bearing objects catch the pointer (an explicit `interactiveObjects` list); a handler-less mesh is pass-through.
 
-- **Override?** Global only — a single `filter(hits)` function, with no per-object flag and no way to opt a handler-less object _in_.
-- **Subtree?** Caught — the ray test is recursive over the interactive list and its descendants.
+|                        | behaviour                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **override**           | Global only — a single `filter(hits)` function, with no per-object flag and no way to opt a handler-less object _in_. |
+| **subtree delegation** | Caught — the ray test is recursive over the interactive list and its descendants.                                     |
 
 ### Where they land
 

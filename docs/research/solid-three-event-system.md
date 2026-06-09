@@ -30,10 +30,8 @@ Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` 
 
 Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, both **unmerged**. They are _parallel proposals_, not a sequence: `git merge-base --is-ancestor` confirms neither is an ancestor of the other. Both move solid-three off the r3f-shaped `*Missed` (per-object complement, both levels) toward a tres-shaped, void-only model:
 
-|                                                                  | approach                                                                                                                                                                                           |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **#75 `onVoid*`** (`feat/void-events`; `d25e9e3d`, `b1671bcb`)   | drop `*Missed` for a dedicated `onVoid*` canvas family (`onVoidClick`, `onVoidPointerDown`, …) — a per-gesture void handler, matching the prior-art convention of a dedicated canvas miss handler. |
-| **#76 `event.object`** (`feat/void-via-event-object`; `dad769e`) | drop `*Missed` and detect the void by reading `event.object` (undefined) on the ordinary canvas-level handler — the "general canvas handler carries `event.object`" model.                         |
+- **#75 `onVoid*`** (`feat/void-events`; `d25e9e3d`, `b1671bcb`): drop `*Missed` for a dedicated `onVoid*` canvas family (`onVoidClick`, `onVoidPointerDown`, …) — a per-gesture void handler, matching the prior-art convention of a dedicated canvas miss handler.
+- **#76 `event.object`** (`feat/void-via-event-object`; `dad769e`): drop `*Missed` and detect the void by reading `event.object` (undefined) on the ordinary canvas-level handler — the "general canvas handler carries `event.object`" model.
 
 The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals the `onWheel` asymmetry still stands.
 
