@@ -6,6 +6,14 @@
 
 A 2D UI toolkit gets pointer events almost for free: the browser hit-tests the DOM, picks a target, and bubbles the event up the tree. A 3D scene has none of that machinery. There's a camera, a ray, and a graph of meshes — and from that you have to define, from scratch, what "the user clicked on that" even means: which object a ray belongs to, what happens to the objects behind it, and what it means to click where there is nothing at all.
 
+Concretely, here is the picture to hold onto. Every pointer interaction starts as a ray shot from the camera, through the cursor, into the scene — and that ray can pass through several meshes lined up in depth: the nearest, then whatever sits behind it, and so on. Three questions fall out of that and never go away:
+
+1. Of the things the ray passes through, which does it actually _stop_ at — which ones count as "clickable"?
+2. When you click one, what happens to the ones behind it — does the click reach them too?
+3. When the ray hits _nothing at all_ — you clicked empty space — how does anything find out?
+
+That last question is the basis of **deselection**: clicking empty space to clear a selection, the way clicking your desktop background deselects a file. In a 3D scene an empty-space click hits nothing, so there is no event to catch unless the framework manufactures one — which is exactly where `onPointerMissed` will come in.
+
 There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`), and Threlte all ship pointer-event systems, and all reached for the same reference: the DOM. (Two of them share an origin: react-three-fiber and the standalone `@pmndrs/pointer-events` that TresJS builds on both come from the **pmndrs** group — the doc calls them **r3f** and **pmndrs**.) Reuse its vocabulary — `onClick`, bubbling, `stopPropagation`, `pointer-events: none` — so a web developer feels at home. That's a reasonable instinct and worth taking seriously. It's also worth holding at arm's length, because the goal is not DOM parity — it's a pointer-event system that is good _for 3D_. Those are different targets, and the places where they pull apart are exactly where these systems get confusing.
 
 The core claim of this document: "pointer events" is not one decision but **three independent ones** — _occlusion_, _propagation_, and _the miss_ — and most of the confusion comes from treating them as a single bundle, or from assuming that because a system borrowed the DOM's _words_ it also borrowed the DOM's _behavior_.
