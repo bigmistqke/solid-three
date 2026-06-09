@@ -80,11 +80,21 @@ Only handler-bearing objects catch the pointer (an explicit `interactiveObjects`
 
 ### Where they land
 
-All three 3D libs **invert the DOM default**: pass-through-unless-it-has-a-handler, versus the DOM's catch-all-unless-`pointer-events:none`. They agree on **recursive subtree delegation** (a parent handler covers its whole subtree — the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one). They split on **override**: only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only. On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
+All three 3D libs **invert the DOM default** — pass-through unless an object has a handler, versus the DOM's catch-all unless `pointer-events: none`. Within that:
+
+- **they agree on subtree delegation** — a parent handler covers its whole subtree (the real exception to "handler-less = pass-through", which holds only for objects that are _not_ descendants of a handler-bearing one).
+- **they split on override** — only the pmndrs stack restores the DOM's per-object control; r3f is opt-out-only, Threlte global-only.
+
+On this axis pmndrs is the DOM-faithful pole — the end of the spectrum that behaves most like the DOM.
 
 ## Propagation — how a hit becomes handler calls
 
-Once the ray hits something, whose handlers fire, in what order, and what `stopPropagation` stops. An event can travel two ways from a hit: **ancestor bubbling** — up the hit object's parent chain — and **z-depth tunnelling** — back through the objects stacked _behind_ the hit, nearest first. Every system here bubbles up ancestors; the one thing that varies is whether it _also_ tunnels through depth. A system that doesn't — nearest object, then its ancestors, nothing behind — is **closest-hit** (ancestor bubbling with no tunnelling). The trap: "it bubbles like the DOM" hears _ancestor bubbling_ and assumes that's all there is, missing the z-depth tunnelling that r3f and Threlte add on top.
+Once the ray hits something, whose handlers fire, in what order, and what `stopPropagation` stops. An event can travel **two ways** from a hit:
+
+- **ancestor bubbling** — up the hit object's parent chain.
+- **z-depth tunnelling** — back through the objects stacked _behind_ the hit, nearest first.
+
+Every system here bubbles up ancestors; the one thing that varies is whether it _also_ tunnels through depth. A system that doesn't — nearest object, then its ancestors, nothing behind — is **closest-hit**. The trap: "it bubbles like the DOM" hears _ancestor bubbling_ and assumes that's all there is, missing the z-depth tunnelling that r3f and Threlte add on top.
 
 ### DOM
 
@@ -104,7 +114,12 @@ z-depth tunnel plus ancestor bubble — the same hybrid as r3f. `getHits` walks 
 
 ### Where they land
 
-The DOM and pmndrs propagate along **ancestry only** (closest hit, then bubble); r3f and Threlte add **z-depth tunnelling** on top. So z-depth tunnel is the 3D _majority_ (r3f, Threlte), and closest-hit-only (pmndrs) is the _minority_ — and, again, the DOM-faithful one. The confusion isn't that tunnelling is rare; it's that it's never named as distinct from tree-bubbling.
+The split lines up with DOM-faithfulness:
+
+- **closest-hit (ancestry only):** the DOM, pmndrs, and **TresJS** (which uses pmndrs) — the event reaches only the nearest object, then its ancestors.
+- **z-depth tunnel (+ ancestor bubble):** r3f and Threlte — the event _also_ travels back through the objects stacked behind.
+
+So tunnelling isn't a majority behaviour: it's r3f and the r3f-derived Threlte, while the DOM-faithful side (pmndrs / TresJS) stays closest-hit. The confusion isn't about which is rarer — it's that tunnelling is never named as distinct from tree-bubbling.
 
 ## The miss — how a target learns a click didn't land on it
 
@@ -223,7 +238,14 @@ const [selected, setSelected] = createSignal()
 const isSelectedA = () => selected() === "a"
 ```
 
-In this shape the "not-me" notification isn't needed: box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is set by a positive click (with `stopPropagation`); deselection is the void clearing the signal. The two shapes have different properties — decentralized scatters state and pays the complement pass; centralized concentrates state and leans on the void — and which fits a given app is a design choice, not something this document settles.
+In this shape the "not-me" notification isn't needed: box B re-derives `selected() === "b"` reactively rather than being _told_ A was clicked. Selection is set by a positive click (with `stopPropagation`); deselection is the void clearing the signal.
+
+The two shapes have different properties:
+
+- **decentralized** — scatters selection state across objects and pays the complement pass.
+- **centralized** — concentrates state in one signal and leans on the void.
+
+Which fits a given app is a design choice, not something this document settles.
 
 ### Where `onPointerMissed` came from (in r3f)
 
@@ -239,7 +261,12 @@ In this shape the "not-me" notification isn't needed: box B re-derives `selected
 | **Propagation**                    | ancestors only                             | z-depth tunnel + ancestor bubble               | **closest hit only** + ancestor bubble                                                  | z-depth tunnel + ancestor bubble                                       |
 | **The miss**                       | none native (read `target === background`) | `onPointerMissed`: canvas **and** per-object   | VoidObject (canvas-level only); a positive hit on a synthetic sphere                    | per-object `onpointermissed` **only** — no canvas-level, no VoidObject |
 
-Two clusters fall out of it. **r3f and Threlte are nearly the same system** — z-depth-tunnel + ancestor-bubble propagation and per-object `onPointerMissed` (their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops). `@pmndrs/pointer-events` (and thus TresJS) is the real outlier: closest-hit-only propagation, the VoidObject, and the only true per-object override. So the "mainstream 3D" model is r3f's, and pmndrs is the one genuine alternative — and it's also the most DOM-faithful on every axis (closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property).
+Two clusters fall out of it:
+
+- **r3f and Threlte are nearly the same system** — z-depth-tunnel + ancestor-bubble propagation and per-object `onPointerMissed`. Their lone miss-axis difference: r3f _also_ fires a canvas-level miss callback, which Threlte drops.
+- **`@pmndrs/pointer-events` (and thus TresJS) is the real outlier** — closest-hit-only propagation, the VoidObject, and the only true per-object override.
+
+So the "mainstream 3D" model is r3f's, and pmndrs is the one genuine alternative — and it's also the most DOM-faithful on every axis: closest-hit ≈ DOM occlusion, VoidObject ≈ the always-a-target document, `pointerEvents` ≈ the CSS property.
 
 ## Worked scenarios
 
