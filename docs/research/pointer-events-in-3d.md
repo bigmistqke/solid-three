@@ -22,7 +22,7 @@ But the taxonomy is in service of one concrete question — the reason this docu
 
 ## How this document is organised
 
-Each axis is defined once, then placed for the DOM and the three prior arts in turn — a subheading per framework for occlusion and propagation, a table for the two-dimensional miss axis — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; the miss axis closes by turning to the design need under `onPointerMissed`: deselection. solid-three's own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
+Each axis is defined once, then placed for the DOM and the three prior arts in turn — one subheading per framework — and closed with a short synthesis. solid-three is deliberately held _out_ of this cross-framework comparison; the miss axis closes by turning to the design need under `onPointerMissed`: deselection. solid-three's own path through the space — and the design questions that remain — lives in a [companion chronology](./solid-three-event-system.md).
 
 The three axes:
 
@@ -127,16 +127,49 @@ The negative signal — code learning that a click did _not_ land on a given tar
 - **the void** — canvas-level: the click hit _nothing_ (empty space). This is the deselect case.
 - per-object **"not-me"** — the click hit _something else_ (another object).
 
-"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one — what `onPointerMissed` really is, and the design need under it, close the section. First, how each framework places the two levels:
+"The void" names only the first half; **the miss** is the whole axis. The per-object half is the deeper one — what `onPointerMissed` really is, and the design need under it, close the section. First, each framework.
 
-| Framework             | the void — clicked nothing (empty space)                                                                      | not-me — clicked some _other_ object                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **DOM**               | read off the target: the background element is always a target, so `event.target === container` _is_ the void | none — selection is centralised: a click bubbles to a container and you inspect `target`   |
-| **react-three-fiber** | canvas-level `onPointerMissed` fires on a total miss                                                          | per-object `onPointerMissed` fires on every interactive object _not_ hit                   |
-| **TresJS / pmndrs**   | the VoidObject — a synthetic sphere the ray "hits" when nothing real is hit; an ordinary `click` on it        | none — the VoidObject is one global object, so it can only report "the _scene_ was missed" |
-| **Threlte**           | none — no canvas signal, no VoidObject                                                                        | per-object `onpointermissed` fires on every registered object _not_ hit                    |
+### DOM
 
-Three details the table flattens. r3f's void and not-me are a single non-propagating pass — they ignore `stopPropagation`. TresJS's void is canvas-only by construction: `pointerMissed` is absent from its per-object `supportedPointerEvents` allow-list, so a `@pointermissed` written on an object is silently dropped (it exists only as a `<TresCanvas>` event). And in Threlte, with no canvas signal, the only deselect path is to put `onpointermissed` on the selectable object itself.
+No native miss — neither level is a fired event.
+
+| level        | behaviour                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| **the void** | read off the target: the background element is always a target, so `event.target === container` _is_ the void |
+| **not-me**   | none — selection is centralised: a click bubbles to a container and you inspect `target`                      |
+
+### react-three-fiber
+
+**Both levels**, both via `onPointerMissed`:
+
+| level        | behaviour                                                                |
+| ------------ | ------------------------------------------------------------------------ |
+| **the void** | canvas-level `onPointerMissed` fires on a total miss                     |
+| **not-me**   | per-object `onPointerMissed` fires on every interactive object _not_ hit |
+
+Both are a non-propagating pass over r3f's interactive objects; they ignore `stopPropagation`.
+
+### TresJS / @pmndrs/pointer-events
+
+**Canvas-level only.**
+
+| level        | behaviour                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| **the void** | the VoidObject — a synthetic sphere the ray "hits" when nothing real is hit; an ordinary `click` on it |
+| **not-me**   | none — the VoidObject is one global object, so it can only report "the _scene_ was missed"             |
+
+(Verified: `pointerMissed` is absent from TresJS's per-object `supportedPointerEvents` allow-list, so a `@pointermissed` written on an object is silently dropped — it exists only as a `<TresCanvas>` event.)
+
+### Threlte
+
+**Per-object only.**
+
+| level        | behaviour                                                               |
+| ------------ | ----------------------------------------------------------------------- |
+| **the void** | none — no canvas signal, no VoidObject                                  |
+| **not-me**   | per-object `onpointermissed` fires on every registered object _not_ hit |
+
+Deselect therefore means putting `onpointermissed` on the selectable object itself.
 
 ### Where they land
 
