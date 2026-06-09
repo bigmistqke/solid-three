@@ -4,15 +4,15 @@
 
 solid-three's pointer-event system was built the way most are: ported from react-three-fiber, then rewritten and re-rewritten — each time _without_ the design-space analysis the companion document lays out. This chronology records what the semantics actually _were_ at each stage, and the behaviour that _emerged_ from those rebuilds: some of it chosen deliberately, some of it not — most starkly, a regression nobody intended. It is the case study for why mapping the space first is worth doing.
 
-Branch names that recur: `main` = the original/legacy port; `next` = the current development line; `next-dirty` = `next`'s un-squashed history (the original per-commit history, before the PRs were squash-merged into `next`). All receipts are commit hashes and dates from `next-dirty`.
+Commit hashes and dates below are from the un-squashed history (`next-dirty`).
 
 ## 2023 — a 1:1 r3f port
 
-solid-three began as a close port of r3f, down to the `solid-zustand` store: the `interaction` array, `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble (`src/core/events.ts` carries r3f's bubble loop verbatim). `onPointerMissed` arrived via `vorth/pointer-missed` (PR #8, merge `dd794de1`, 2023-05-22; closes issue **#7**), with a follow-up bugfix that December. The later zustand → `solid-js/store` migration (`f8bc3716`, 2023-07-16) left the bubbling untouched. (This port still lives on `main`.)
+solid-three began as a close port of r3f, and so did its event system: a single `interaction` array (**union** occlusion), `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble. `onPointerMissed` arrived via PR #8 (`dd794de1`, 2023-05-22).
 
-## 2024 — a from-scratch rewrite: bubbling back, occlusion quietly per-type
+## 2024 — rebuilt from scratch: bubbling lost then restored, occlusion quietly per-type
 
-The current solid-three does **not** descend from that port; it descends from a separate, from-scratch rewrite (the flat `src/` layout, no `zustand`) that branched off at the PR #8 merge (`dd794de1`) and re-implemented events. `cc02bab4` (2024-04-11) deleted `src/core/events.ts` and added a flat `src/events.ts` with **no bubbling at all** (and no `onPointerMissed` — the rewrite dropped it); `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back, re-establishing what the original port had had all along. The two lines are genuinely parallel: `git merge-base` (which finds two commits' most recent common ancestor) confirms the port tip is _not_ an ancestor of the rewrite, and `next` descends from the rewrite, not the port.
+In 2024 the event system was rebuilt from scratch (the flat `src/` layout). `cc02bab4` (2024-04-11) replaced it with a flat `src/events.ts` that had **no bubbling at all** and no `onPointerMissed`; `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back. So for a few days the event system had no propagation up the tree, then regained it.
 
 The rewrite also changed occlusion — though no commit says so. Its `eventRegistry` was a dict keyed by event type: one object list per gesture (`eventRegistry.onClick`, `eventRegistry.onWheel`, …), and a click raycast only its own bucket (`intersectObjects(eventRegistry[type], true)`). An `onWheel`-only object was therefore never in the `onClick` bucket. That flipped occlusion from the **union** the 2023 port inherited from r3f (any handler ⇒ hittable by every gesture) to **per-type** (hittable only for the gestures it handles) — an emergent property of keying the registry by type, not a decision anyone recorded. The effect stayed invisible until `*Missed` arrived to expose it (next section).
 
@@ -47,7 +47,7 @@ Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` 
 
 ## Jun 2026 — the void fork (open)
 
-Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, both **unmerged**. They are _parallel proposals_, not a sequence: `git merge-base --is-ancestor` confirms neither is an ancestor of the other. Both move solid-three off the r3f-shaped `*Missed` (per-object miss, both levels) toward a tres-shaped, void-only model. They differ only in how you ask for the void:
+Two **unmerged** branches (both 2026-06-08) propose replacing `*Missed` — _parallel proposals_, not a sequence. Both move solid-three off the r3f-shaped `*Missed` (per-object miss, both levels) toward a tres-shaped, void-only model. They differ only in how you ask for the void:
 
 ```jsx
 // #75 (feat/void-events; d25e9e3d, b1671bcb) — a dedicated canvas handler per gesture
