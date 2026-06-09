@@ -29,9 +29,9 @@ A burst of same-day commits (2025-08-04) brought the miss back — and split it 
 </Canvas>
 ```
 
-Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an object catch every gesture** ("union"): B would catch your _click_ even though it only wants the wheel, the canvas would see a hit rather than a miss, and `onClickMissed` would never fire — deselect silently broken. But solid-three is **per-type**: B sits only in the `onWheel` bucket, a click ray never tests it, the click hits nothing, `onClickMissed` fires, and deselect works.
+Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an object catch every gesture** ("union"): B catches your _click_ even though it only wants the wheel, so the canvas counts a hit rather than a miss, `onClickMissed` doesn't fire, and `deselect()` doesn't run. solid-three is **per-type**: B sits only in the `onWheel` bucket, a click ray never tests it, the click hits nothing, `onClickMissed` fires, and `deselect()` runs.
 
-Was this _better_? Not obviously: it dodged the unrelated-`onWheel` gotcha, but diverged from the union norm every other framework (and the DOM) shares, and it raised a question it never answered — should a click pass _through_ an object that doesn't handle it, or be blocked? Its likeliest real advantage was performance: each gesture raycasts only its own, smaller bucket, not every handler-bearing object. Either way, nobody had decided it — and an undecided behaviour is an easily-lost one. The next section is how.
+Was this _better_? Not clearly — arguably not at all. Union's behaviour (a click on a visible `onWheel` object is a hit, so it doesn't deselect) is a defensible default; per-type lets clicks fall _through_ objects that don't happen to handle them, which can surprise just as much the other way. Per-type's one clear edge is performance: each gesture raycasts only its own, smaller bucket, not every handler-bearing object. Either way, nobody had decided it — and an undecided behaviour is an easily-lost one. The next section is how.
 
 ## Jun 2026 — #66, the source-agnostic refactor (the regression)
 
