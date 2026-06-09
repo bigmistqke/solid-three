@@ -14,7 +14,7 @@ Concretely, here is the picture to hold onto. Every pointer interaction starts a
 
 That last question is the basis of **deselection**: clicking empty space to clear a selection, the way clicking your desktop background deselects a file. In a 3D scene an empty-space click hits nothing, so there is no event to catch unless the framework manufactures one — which is exactly where `onPointerMissed` will come in.
 
-There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`), and Threlte all ship pointer-event systems, and all reached for the same reference: the DOM. (Two of them share an origin: react-three-fiber and the standalone `@pmndrs/pointer-events` that TresJS builds on both come from the **pmndrs** group — the doc calls them **r3f** and **pmndrs**.) Reuse its vocabulary — `onClick`, bubbling, `stopPropagation`, `pointer-events: none` — so a web developer feels at home. That's a reasonable instinct and worth taking seriously. It's also worth holding at arm's length, because the goal is not DOM parity — it's a pointer-event system that is good _for 3D_. Those are different targets, and the places where they pull apart are exactly where these systems get confusing.
+There's prior art. react-three-fiber, TresJS (through `@pmndrs/pointer-events`), and Threlte all ship pointer-event systems, and all reached for the same reference: the DOM. (Shorthand used throughout: **r3f** = react-three-fiber; **pmndrs** = `@pmndrs/pointer-events`, the standalone library TresJS builds its events on.) Reuse its vocabulary — `onClick`, bubbling, `stopPropagation`, `pointer-events: none` — so a web developer feels at home. That's a reasonable instinct and worth taking seriously. It's also worth holding at arm's length, because the goal is not DOM parity — it's a pointer-event system that is good _for 3D_. Those are different targets, and the places where they pull apart are exactly where these systems get confusing.
 
 The core claim of this document: "pointer events" is not one decision but **three independent ones** — _occlusion_, _propagation_, and _the miss_ — and most of the confusion comes from treating them as a single bundle, or from assuming that because a system borrowed the DOM's _words_ it also borrowed the DOM's _behavior_.
 
@@ -248,7 +248,7 @@ So "what is `onPointerMissed`?" — it's a non-propagating, per-object _deselect
 
 ### The self-disqualification gotcha
 
-Because the miss fires on every interactive object _except_ the ones hit, and because `onPointerMissed` _itself_ makes an object interactive (it raises `eventCount`), a parent is silently excluded from its own children's clicks. Walk it:
+`onPointerMissed` _itself_ makes an object interactive — it raises `eventCount`, the internal counter that decides whether an object is in the hit-test set. That creates a trap: the very property that makes an object _eligible_ for a miss (it has a handler) is what makes it count as _hit_ whenever anything in its subtree is clicked (it has a handler, so its descendants' clicks bubble up into the hit set). So a parent that listens for `onPointerMissed` is silently excluded from its own children's clicks — it only ever misses on the _true void_, never on its own descendants. Walk a concrete case:
 
 ```jsx
 // OUTER is interactive *because* onPointerMissed counts toward eventCount
@@ -265,7 +265,7 @@ click INNER:
   ⇒ OUTER.onPointerMissed does NOT fire
 ```
 
-The property that makes OUTER _eligible_ for a miss (it has a handler) is the same property that makes it count as _hit_ on any subtree click (it has a handler, so it bubbles into the hit set). A parent therefore only misses on the _true void_, never on its own descendants — a non-obvious consequence of `onPointerMissed` raising `eventCount`. `stopPropagation` doesn't enter into it: the missed pass ignores `stopped` entirely.
+The trace confirms it: OUTER bubbles into `hitObjects`, so it's not in the complement, so its `onPointerMissed` stays silent. `stopPropagation` doesn't enter into it either — the missed pass ignores `stopped` entirely.
 
 ### The problem underneath: deselection
 
@@ -311,7 +311,7 @@ In this shape the "not-me" notification isn't needed: box B re-derives `selected
 
 ## solid-three's event system: a chronology
 
-solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour as an unintended side effect, and the current state isn't one design but a fork between two. (This section is project history — skip it unless you want solid-three's specific path; hashes and dates are from the un-squashed `next-dirty` history.)
+solid-three began as a react-three-fiber port, and its event system has been rebuilt several times since. The history matters because one rebuild changed behaviour as an unintended side effect, and the current state isn't one design but a fork between two. Skip this section unless you want solid-three's specific path. (Branch names that recur below: `main` = the original/legacy port; `next` = the current development line; `next-dirty` = `next`'s un-squashed history, where the hashes and dates come from.)
 
 ### 2023 — a 1:1 r3f port
 
