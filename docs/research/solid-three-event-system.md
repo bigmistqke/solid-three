@@ -16,11 +16,34 @@ The current solid-three does **not** descend from that port; it descends from a 
 
 ## Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-A burst of same-day commits (2025-08-04) split the single `onPointerMissed` into per-gesture `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object the ray did _not_ hit — occlusion-correct and `stopPropagation`-aware (where r3f's miss ignores `stopPropagation`). The same pass (`a0ffc80f`) introduced **per-category registries** (separate missable / hover / default registries, routed by handler type) — and with them the one place solid-three diverged from every other framework on _occlusion_. Everywhere else is **union**: any single handler makes an object catch _every_ gesture (a box with only `onWheel` is a catch-all for `click` too — a click ray still hits it). The per-category registries instead made an object catch only the gestures it actually handled — **per-type**: an `onWheel`-only object lived in the wheel registry, not the click registry, so clicking it did _not_ suppress the click-miss.
+Two changes landed in a burst of same-day commits (2025-08-04).
+
+**The miss was split per gesture** — `onPointerMissed` became `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object a click _didn't_ land on (and respecting `stopPropagation`, which r3f's miss doesn't).
+
+**And occlusion diverged from every other framework** (`a0ffc80f`). Take this scene and click the second box:
+
+```jsx
+<Canvas onClickMissed={() => deselect()}>
+  <Box onClick={...} />   // A — handles clicks
+  <Box onWheel={...} />   // B — handles the wheel, nothing else
+</Canvas>
+```
+
+Everywhere else — r3f, TresJS, Threlte — **one handler of any kind makes an object catch every gesture** ("union"). So B catches your _click_ even though it only wants the wheel: the click lands on B, the canvas sees a hit rather than a miss, `onClickMissed` never fires, and your deselect silently doesn't happen. An unrelated `onWheel` ate the click.
+
+solid-three made occlusion **per-type**: an object catches only the gestures it handles. B handles the wheel, not clicks, so a click ray passes straight through it — the click hits nothing, `onClickMissed` fires, deselect works.
+
+(Mechanically: a separate object list — a "registry" — per gesture; B only joined the wheel list.)
+
+This was the one place solid-three behaved _better_ than the prior art. The next section is how it was lost.
 
 ## Jun 2026 — #66, the source-agnostic refactor (the regression)
 
-`#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases — and, as collateral, **collapsed the per-category registries into one union `eventRegistry`** (`addEventListener(object, _type)` now ignores `_type`). Changing occlusion semantics wasn't the goal; the collapse served source-agnosticism. But it flipped per-type → union, reintroducing the `onWheel`-suppresses-click-miss asymmetry the per-category design had avoided. No test caught it — the suite pinned registry _routing_, not observable behaviour. This is the **emergent regression**: a behaviour change nobody chose, invisible because nothing tested behaviour.
+`#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases. As collateral, it **collapsed the per-gesture registries back into one** — every handler object went into a single `eventRegistry` again, regardless of gesture (`addEventListener(object, _type)` now ignores `_type`).
+
+That's the union model from the previous section. Click box B again and `deselect()` silently stops firing — B is back to eating the click. Changing occlusion wasn't the goal; the collapse served source-agnosticism, and flipped per-type → union as a side effect.
+
+No test caught it — the suite pinned _which registry_ an object lands in (routing), not _what happens when you click_ (behaviour). This is the **emergent regression**: a behaviour change nobody chose, invisible because nothing tested behaviour.
 
 ## Jun 2026 — #69 / #72, capture and typing
 
@@ -28,10 +51,17 @@ Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` 
 
 ## Jun 2026 — the void fork (open)
 
-Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, both **unmerged**. They are _parallel proposals_, not a sequence: `git merge-base --is-ancestor` confirms neither is an ancestor of the other. Both move solid-three off the r3f-shaped `*Missed` (per-object miss, both levels) toward a tres-shaped, void-only model:
+Two branches replace `*Missed` — both 2026-06-08, both forking off `5e7875f`, both **unmerged**. They are _parallel proposals_, not a sequence: `git merge-base --is-ancestor` confirms neither is an ancestor of the other. Both move solid-three off the r3f-shaped `*Missed` (per-object miss, both levels) toward a tres-shaped, void-only model. They differ only in how you ask for the void:
 
-- **#75 `onVoid*`** (`feat/void-events`; `d25e9e3d`, `b1671bcb`): drop `*Missed` for a dedicated `onVoid*` canvas family (`onVoidClick`, `onVoidPointerDown`, …) — a per-gesture void handler, matching the prior-art convention of a dedicated canvas miss handler.
-- **#76 `event.object`** (`feat/void-via-event-object`; `dad769e`): drop `*Missed` and detect the void by reading `event.object` (undefined) on the ordinary canvas-level handler — the "general canvas handler carries `event.object`" model.
+```jsx
+// #75 (feat/void-events; d25e9e3d, b1671bcb) — a dedicated canvas handler per gesture
+<Canvas onVoidClick={() => deselect()} />
+
+// #76 (feat/void-via-event-object; dad769e) — the ordinary canvas handler; void = no object
+<Canvas onClick={e => { if (!e.object) deselect() }} />
+```
+
+#75's `onVoid*` family matches the prior-art convention of a dedicated canvas miss handler (`onPointerMissed`, `@pointermissed`). #76's `event.object` reading has no prior-art precedent — it works only because solid-three wires `<Canvas>` handlers into the pointer system (see _Threads_).
 
 The open question is which void _representation_ wins. Neither restores the per-type occlusion that #66 dropped, so on the merged baseline and both proposals the `onWheel` asymmetry still stands.
 
