@@ -8,6 +8,33 @@ solid-three's pointer-event system was built the way most are: ported from react
 
 This document is organised around that: the **open questions** the system still has to answer, then **past** (how it got here), **now** (what `next` does today, exactly), and **future** (the two open PRs, each run against the open questions). Dates and PR numbers are inline; the underlying commit hashes are collected under [Commits referenced](#commits-referenced) at the end (un-squashed history, `next-dirty`).
 
+## Contents
+
+- [Open questions](#open-questions)
+  - [Occlusion — per-type or union?](#occlusion--per-type-or-union)
+  - [Propagation — z-depth tunnel or closest-hit?](#propagation--z-depth-tunnel-or-closest-hit)
+  - [Occlusion override — opt-out only, or a per-object control?](#occlusion-override--opt-out-only-or-a-per-object-control)
+  - [The participation rule for the void — union-by-listener or gesture-scoped?](#the-participation-rule-for-the-void--union-by-listener-or-gesture-scoped)
+  - [The miss model — per-object "not-me", or only the void?](#the-miss-model--per-object-not-me-or-only-the-void)
+  - [Void delivery — a dedicated handler, or read it off the event?](#void-delivery--a-dedicated-handler-or-read-it-off-the-event)
+- [Reading the axes](#reading-the-axes)
+- [One scene, three probes](#one-scene-three-probes)
+- [Past](#past)
+  - [2023 — a 1:1 r3f port](#2023--a-11-r3f-port)
+  - [2024 — rebuilt from scratch: bubbling lost then restored, occlusion quietly per-type](#2024--rebuilt-from-scratch-bubbling-lost-then-restored-occlusion-quietly-per-type)
+  - [Aug 2025 — the `*Missed` era, the first deliberate redesign](#aug-2025--the-missed-era-the-first-deliberate-redesign)
+  - [Jun 2026 — #66, the source-agnostic refactor (a silent occlusion flip)](#jun-2026--66-the-source-agnostic-refactor-a-silent-occlusion-flip)
+  - [Jun 2026 — #69 / #72, capture and typing](#jun-2026--69--72-capture-and-typing)
+- [Now — what `next` does today, exactly](#now--what-next-does-today-exactly)
+- [Future — the void fork (open)](#future--the-void-fork-open)
+  - [#75 — `onVoid*`, a dedicated canvas handler](#75--onvoid-a-dedicated-canvas-handler)
+  - [#76 — `event.object`, read off the canvas handler](#76--eventobject-read-off-the-canvas-handler)
+  - [The hidden fork: participation](#the-hidden-fork-participation)
+  - [What the fork leaves open](#what-the-fork-leaves-open)
+- [Threads through this history](#threads-through-this-history)
+- [At a glance — every axis across the timeline](#at-a-glance--every-axis-across-the-timeline)
+- [Commits referenced](#commits-referenced)
+
 ## Open questions
 
 These are the six axes a complete pointer-event system has to settle. Four restate the companion document's design space — occlusion, propagation, override, the miss. Two are solid-three's own: the participation rule, and how the void is delivered. The open fork touches only the last three — participation, the miss model, delivery — so occlusion, propagation, and override stay open whichever PR lands.

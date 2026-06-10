@@ -4,6 +4,12 @@
 
 Deselection — clicking empty space to clear a selection — is the one need the whole `*Missed` family exists to serve. There are two ways to build it in solid-three, and which one an app uses decides whether per-object **"not-me"** (a handler firing on every object the click _didn't_ land on) is needed at all.
 
+## Contents
+
+- [Decentralized — each object listens for its own miss](#decentralized--each-object-listens-for-its-own-miss)
+- [Centralized — one signal, cleared by the void](#centralized--one-signal-cleared-by-the-void)
+- [The tradeoff](#the-tradeoff)
+
 ## Decentralized — each object listens for its own miss
 
 Each selectable object owns a boolean and listens for its own miss via `*Missed`:

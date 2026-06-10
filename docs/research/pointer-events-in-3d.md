@@ -2,6 +2,34 @@
 
 > Working draft. An analysis of the problem space, using react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte as prior art. Versions and the source files read are listed under **Sources** at the end (all 2026-06-09). solid-three's own history is a companion document — [solid-three's pointer-event system: a chronology](./solid-three-event-system.md).
 
+## Contents
+
+- [The problem](#the-problem)
+- [How this document is organised](#how-this-document-is-organised)
+- [Lexicon](#lexicon)
+- [Occlusion — which objects stop the ray?](#occlusion--which-objects-stop-the-ray)
+  - [DOM](#dom)
+  - [react-three-fiber](#react-three-fiber)
+  - [TresJS / @pmndrs/pointer-events](#tresjs--pmndrspointer-events)
+  - [Threlte](#threlte)
+  - [Where they land](#where-they-land)
+- [Propagation — how a hit becomes handler calls](#propagation--how-a-hit-becomes-handler-calls)
+  - [DOM](#dom-1)
+  - [react-three-fiber](#react-three-fiber-1)
+  - [TresJS / @pmndrs/pointer-events](#tresjs--pmndrspointer-events-1)
+  - [Threlte](#threlte-1)
+  - [Where they land](#where-they-land-1)
+- [The miss — how a target learns a click didn't land on it](#the-miss--how-a-target-learns-a-click-didnt-land-on-it)
+  - [DOM](#dom-2)
+  - [react-three-fiber](#react-three-fiber-2)
+  - [TresJS / @pmndrs/pointer-events](#tresjs--pmndrspointer-events-2)
+  - [Threlte](#threlte-2)
+  - [Where they land](#where-they-land-2)
+  - [Where `onPointerMissed` came from (in r3f)](#where-onpointermissed-came-from-in-r3f)
+- [The landscape, at a glance](#the-landscape-at-a-glance)
+- [Worked scenarios](#worked-scenarios)
+- [Sources](#sources)
+
 ## The problem
 
 A 2D UI toolkit gets pointer events almost for free: the browser hit-tests the DOM, picks a target, and bubbles the event up the tree. A 3D scene has none of that machinery. There's a camera, a ray, and a graph of meshes — and from that you have to define, from scratch, what "the user clicked on that" even means: which object a ray belongs to, what happens to the objects behind it, and what it means to click where there is nothing at all.
