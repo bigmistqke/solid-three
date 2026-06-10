@@ -232,12 +232,14 @@ Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` 
 
 The merged baseline, stated against the six open questions:
 
-- **Occlusion — union.** One `eventRegistry`; any handler-bearing object is raycast for every gesture (`addEventListener(object, _type)` ignores `_type`, internal-context.ts). An `onWheel`-only mesh is tested by a click ray.
-- **Propagation — z-depth tunnel + ancestor bubble** (r3f-shaped). The raycast yields all stacked hits nearest-first; each fires and bubbles up its parent chain. `stopPropagation` halts all farther entries — behind _and_ not-yet-fired ancestors. A node shared by several hits fires once (closest chain reaches it first).
-- **Occlusion override — opt-out only.** `raycastable={false}` makes a handler-bearing object pass-through; there's no way to opt a handler-less one _in_.
-- **Void participation — union-by-listener, by accident.** The canvas total-miss is `intersections.length === 0` over the flat registry — so any hit on any handler-bearing object suppresses the miss, regardless of gesture. This is option (a), and it falls out of the registry shape rather than a decision.
-- **Miss model — both levels.** Per-object "not-me" (`onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` on a mesh, firing on the complement set — every registered object the click didn't hit) _and_ a canvas-level total-miss (the same handlers on `<Canvas>`). Computed in `Pointer.click()` as three phases: bubble the hit chain, re-raycast the remaining registry to mark anything genuinely under the ray, then fire `*Missed` on the truly-missed set. These respect `stopPropagation`.
-- **Void delivery — the `*Missed` handlers**, bundled per gesture under one name each (`onClickMissed` covers the click family's miss).
+| Axis | `next` today | mechanism |
+| --- | --- | --- |
+| Occlusion | union | one `eventRegistry`; any handler-bearing object is raycast for every gesture (`addEventListener(object, _type)` ignores `_type`). An `onWheel`-only mesh is tested by a click ray. |
+| Propagation | z-depth tunnel + ancestor bubble | the raycast yields all stacked hits nearest-first; each fires and bubbles up its parent chain. `stopPropagation` halts all farther entries — behind _and_ not-yet-fired ancestors. A node shared by several hits fires once (closest chain reaches it first). |
+| Occlusion override | opt-out only | `raycastable={false}` makes a handler-bearing object pass-through; no way to opt a handler-less one _in_. |
+| Void participation | union-by-listener (by accident) | the canvas total-miss is `intersections.length === 0` over the flat registry — any hit on any handler-bearing object suppresses the miss, regardless of gesture. Option (a), falling out of the registry shape rather than a decision. |
+| Miss model | both levels | per-object "not-me" (`onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed`, firing on the complement set) _and_ a canvas total-miss. `Pointer.click()` runs three phases — bubble the hit chain, re-raycast the leftovers to mark anything genuinely under the ray, fire `*Missed` on the truly-missed set — and respects `stopPropagation`. |
+| Void delivery | `*Missed` | bundled per gesture under one name each (`onClickMissed` covers the click family's miss). |
 
 The three probes behave exactly as at `#66` above: empty space clears, clicking B leaves the selection set while A still hears its own miss, and G's child trips _Surprise B_.
 
