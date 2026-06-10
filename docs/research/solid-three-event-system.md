@@ -262,7 +262,7 @@ A dedicated void handler per gesture (`onVoidClick`, `onVoidWheel`, …) on `<Ca
 | --- | --- | --- |
 | Empty space | fires → clears | n/a |
 | Click B | **fires → clears** — gesture-scoped: no `onClick` in B's chain | n/a |
-| G's child | silent — a real hit | n/a |
+| G's child | silent — a click handler ran (and stopped propagation) | n/a |
 
 Dispatch tracks `firedOnObject`, set true only when a handler _for the dispatched gesture_ runs somewhere in a hit's bubble chain (`propagate` returns it; `finishVoidable` fires `onVoid<Kind>` only when it's false). Clicking B finds no `onClick` in its chain → `firedOnObject` stays false → `onVoidClick` fires. This is **gesture-scoped (option b)**, on purpose — the tests assert it ("gesture-scoped parity, chain-aware"): a click on the wheel-only box reads as a void. The channel is **exclusive**: `onClick` ("a real click was handled") and `onVoidClick` ("none was") never both fire.
 
@@ -293,9 +293,9 @@ No new handler: the ordinary canvas `onClick` (and every canvas pointer prop) fi
 | --- | --- | --- |
 | Empty space | `e.object` undefined → clears | n/a |
 | Click B | `e.object` is B → stays selected | n/a |
-| G's child | `e.object` set → not a void → nothing | n/a |
+| G's child | `stopPropagation` → canvas handler never fires → nothing | n/a |
 
-`click()` routes through the shared `propagate()`, which always fires the canvas handler with `event.object = intersections[0]?.object`. Clicking B is a hit, so `event.object` is B — not `undefined` — so the guard is false. This is **union-by-listener (option a)**, arrived at _incidentally_ (it's just what reading `intersections[0]` gives you): a click on the wheel-only box stays a hit, not a void. The channel is **one**: `onClick` fires on both hit and void, and you branch on `event.object` inside the single handler, which runs on every click and must guard.
+`click()` routes through the shared `propagate()`. Unless an object handler calls `stopPropagation`, that fires the canvas handler with `event.object = intersections[0]?.object` — the hit, or `undefined` on a total miss. Clicking B is a hit, so `event.object` is B (not `undefined`) and the guard is false. This is **union-by-listener (option a)**, arrived at _incidentally_ (it's just what reading `intersections[0]` gives you): a click on the wheel-only box stays a hit, not a void. The channel is **one** — `onClick` carries both hit and void (whenever propagation reaches the canvas), so the single handler branches on `event.object`; a child that stops propagation suppresses it entirely.
 
 ### The hidden fork: participation
 
