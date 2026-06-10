@@ -8,7 +8,7 @@ This document is organised around that: the **open questions** the system still 
 
 ## Open questions
 
-These are the axes a complete pointer-event system has to settle. The companion document names the first four as the design space; the last two are solid-three's own live decisions. The two open PRs touch only the last three — so the occlusion, propagation, and override questions are left open by everything currently on the table, and worth stating so they aren't mistaken for settled.
+These are the axes a complete pointer-event system has to settle. Four restate the companion document's design space — occlusion, propagation, override, the miss; two are solid-three's own — the participation rule and how the void is delivered. The two open PRs touch only the last three (participation, the miss model, void delivery) — so the occlusion, propagation, and override questions are left open by everything currently on the table, and worth stating so they aren't mistaken for settled.
 
 ### Occlusion — per-type or union?
 
@@ -72,7 +72,7 @@ Each stage also re-runs the **same scene**, re-spelled in that era's API and pro
 - **Click B** — the wheel-only box. _Participation:_ does an unrelated handler count as a hit and block the deselect?
 - **G's child** — the box inside the geometry-less group, which stops propagation. _Propagation × miss:_ does G's miss fire even though the click landed inside G?
 
-Each probe carries two of the axes that actually move; propagation, which never moves, is deliberately not probed.
+Together the probes exercise the axes that move; propagation, which never moves, is deliberately not probed.
 
 ## Past
 
@@ -193,7 +193,7 @@ That flipped occlusion back to union. Changing occlusion wasn't the goal — the
 
 #### Axes
 
-| Axis | `#66` — now |
+| Axis | `#66` |
 | --- | --- |
 | Occlusion | **`union`** |
 | Propagation | `tunnel + bubble` |
@@ -345,11 +345,11 @@ Line the two probe tables up and only one row differs — **click B**: #75 clear
 
 ### What the fork leaves open
 
-Neither PR changes occlusion, propagation, or override. In particular, neither brings back the per-type occlusion that #66 dropped: under both, an `onWheel` object still catches a click ray, exactly as it does on `next`. What #75 changes is narrower — whether that catch _counts as a hit that suppresses the void_, not whether the ray stops at the object. So #75 recovers the deselect behaviour per-type used to give (a click on a wheel-only box still clears the selection) without actually restoring per-type occlusion. Everything else stays open whichever PR lands: whether to make occlusion per-type again, whether to trade z-depth tunnelling for closest-hit, and whether to add a per-object override.
+**Participation and occlusion turn out to be separable** — something the history kept conflating, because per-type happened to change both at once. Neither PR changes occlusion, propagation, or override; in particular, neither brings back the per-type occlusion that #66 dropped — under both, an `onWheel` object still catches a click ray, exactly as on `next`. What #75 changes is narrower: whether that catch _counts as a hit that suppresses the void_, not whether the ray stops at the object. So #75 recovers the deselect behaviour per-type used to give (a click on a wheel-only box still clears the selection) without restoring per-type occlusion. Everything else stays open whichever PR lands: whether to make occlusion per-type again, whether to trade z-depth tunnelling for closest-hit, and whether to add a per-object override.
 
 ## Threads through this history
 
-- **The silent flip is the cautionary tale — and it recurs.** #66 changed occlusion (per-type → union) and nothing noticed, because the tests asserted _structure_ (which registry an object lands in), not _behaviour_. The open fork repeats it on void participation: #75 and #76 quietly disagree on it while the discussion is about void delivery. The exhaustive test pass should assert behaviour, and the fork should be decided on participation explicitly, not as a side effect of the delivery choice. Concretely it is one click with shifting answers: clicking the wheel-only box clears the selection in Aug 2025 and under #75, but not in 2023, on `next`, or under #76 — the same gesture, opposite outcomes, none of them deliberately chosen.
+- **The silent flip is the cautionary tale — and it recurs.** #66 changed occlusion (per-type → union) and nothing noticed, because the tests asserted _structure_ (which registry an object lands in), not _behaviour_ (what happens when you click). The open fork repeats it on participation. The lesson is mechanical: assert behaviour rather than routing, and decide each axis on purpose — the chronology above is what happens when neither holds.
 - **solid-three is the only one of the four with general canvas-level 3D handlers.** Its `<Canvas onClick>` (and every canvas pointer prop) is wired into the pointer system — a `context.props` callback fired after bubbling, carrying `event.object` (undefined on a void). r3f's and TresJS's `<Canvas onClick>` are plain DOM; Threlte has no canvas handler at all. That property is what makes #76's `event.object` model expressible — and it's unprecedented in the prior art.
 - **Object override is opt-out only**, via a `raycastable={false}` prop (r3f's counterpart is `raycast={null}`) — like r3f, there's no way to opt a handler-less object _in_.
 - **Event raycasting de-dups on targets, not results.** r3f raycasts each handler object's subtree separately, then de-dups the hits — so overlapping subtrees are ray-tested more than once and the duplicates are thrown away _after_ the work is done. solid-three instead collects the registry into one de-duplicated set (`castRegistry`) and runs a single non-recursive pass, so each mesh is intersected once. Under deeply nested interactive hierarchies that avoids the repeated ray-vs-geometry work; on flat scenes it's a wash. The saving is mechanical — not benchmarked here.
