@@ -2,13 +2,15 @@
 
 > Companion to [Pointer events in 3D](./pointer-events-in-3d.md), which maps the design space — occlusion, propagation, the miss — across the DOM, react-three-fiber, TresJS / `@pmndrs/pointer-events`, and Threlte. Read that first; this document reuses its vocabulary (the void, catch-all / pass-through, the r3f and pmndrs/tres camps) without re-deriving it — except _per-type vs union_, which is solid-three's own deviation and is defined below.
 
+**In one sentence:** solid-three's pointer-event behaviour has been flipped between defensible defaults by one rewrite after another, and nobody noticed each time — because the tests pin _which registry an object lands in_, not _what happens when you click_. The open fork is set to do it a third time: the two PRs are pitched as a choice of how the void is _delivered_, but they quietly disagree on _which clicks count as a void at all_ — an axis the discussion isn't even about.
+
 solid-three's pointer-event system was built the way most are: ported from react-three-fiber, then rewritten and re-rewritten — each time _without_ the design-space analysis the companion document lays out. That history is worth recording precisely, because the same forces are still in play: a fork is open right now that, like the refactor before it, settles a behaviour nobody is looking at.
 
-This document is organised around that: the **open questions** the system still has to answer, then **past** (how it got here), **now** (what `next` does today, exactly), and **future** (the two open PRs, each run against the open questions). Commit hashes and dates are from the un-squashed history (`next-dirty`).
+This document is organised around that: the **open questions** the system still has to answer, then **past** (how it got here), **now** (what `next` does today, exactly), and **future** (the two open PRs, each run against the open questions). Dates and PR numbers are inline; the underlying commit hashes are collected under [Commits referenced](#commits-referenced) at the end (un-squashed history, `next-dirty`).
 
 ## Open questions
 
-These are the axes a complete pointer-event system has to settle. Four restate the companion document's design space — occlusion, propagation, override, the miss; two are solid-three's own — the participation rule and how the void is delivered. The two open PRs touch only the last three (participation, the miss model, void delivery) — so the occlusion, propagation, and override questions are left open by everything currently on the table, and worth stating so they aren't mistaken for settled.
+These are the six axes a complete pointer-event system has to settle. Four restate the companion document's design space — occlusion, propagation, override, the miss. Two are solid-three's own: the participation rule, and how the void is delivered. The open fork touches only the last three — participation, the miss model, delivery — so occlusion, propagation, and override stay open whichever PR lands.
 
 ### Occlusion — per-type or union?
 
@@ -78,7 +80,7 @@ Together the probes exercise the axes that move; propagation, which never moves,
 
 ### 2023 — a 1:1 r3f port
 
-solid-three began as a close port of r3f, and so did its event system: a single `interaction` array (**union** occlusion), `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble. `onPointerMissed` arrived via PR #8 (`dd794de1`, 2023-05-22).
+solid-three began as a close port of r3f, and so did its event system: a single `interaction` array (**union** occlusion), `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble. `onPointerMissed` arrived via PR #8 (2023-05-22).
 
 #### Axes
 
@@ -111,11 +113,11 @@ solid-three began as a close port of r3f, and so did its event system: a single 
 
 #### How it works
 
-r3f's per-object miss fires _only_ on a total miss, so a real hit — clicking B or G's child — triggers nothing. No Surprise B yet.
+r3f's per-object miss fires _only_ on a total miss, so a real hit — clicking B or G's child — triggers nothing.
 
 ### 2024 — rebuilt from scratch: bubbling lost then restored, occlusion quietly per-type
 
-In 2024 the event system was rebuilt from scratch (the flat `src/` layout). `cc02bab4` (2024-04-11) replaced it with a flat `src/events.ts` that had **no bubbling at all** and no `onPointerMissed`; `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back. So for a few days the event system had no propagation up the tree, then regained it.
+In 2024 the event system was rebuilt from scratch (the flat `src/` layout). A 2024-04-11 commit replaced it with a flat `src/events.ts` that had **no bubbling at all** and no `onPointerMissed`; an "add event-bubbling" commit four days later (2024-04-15) added the ancestor walk back. So for a few days the event system had no propagation up the tree, then regained it.
 
 The rewrite also changed occlusion — though no commit says so. Its `eventRegistry` was a dict keyed by event type: one object list per gesture (`eventRegistry.onClick`, `eventRegistry.onWheel`, …), and a click raycast only its own bucket (`intersectObjects(eventRegistry[type], true)`). An `onWheel`-only object was therefore never in the `onClick` bucket. That flipped occlusion from the **union** the 2023 port inherited from r3f to **per-type** — an emergent property of keying the registry by type, not a decision anyone recorded. The effect stayed invisible until `*Missed` arrived to expose it.
 
@@ -146,7 +148,7 @@ The rewrite also changed occlusion — though no commit says so. Its `eventRegis
 
 ### Aug 2025 — the `*Missed` era, the first deliberate redesign
 
-A burst of same-day commits (2025-08-04) brought the miss back — and split it per gesture. `onPointerMissed` (dropped in the rewrite) returned as `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed` (`80f579c6`, `7148625d`), each firing on every registered object a click _didn't_ land on — so a selectable object can hear "something else was clicked" and deselect itself (see [Deselection in solid-three](./deselection-in-solid-three.md)). Unlike r3f's miss, these respect `stopPropagation`. The same pass (`a0ffc80f`) regrouped the registries by behaviour (missable / movable / default) but kept them keyed per type. The override prop also lands here (a `pointerEvents` boolean, soon renamed `raycastable`).
+A burst of same-day commits (2025-08-04) brought the miss back — and split it per gesture. `onPointerMissed` (dropped in the rewrite) returned as `onClickMissed` / `onDoubleClickMissed` / `onContextMenuMissed`, each firing on every registered object a click _didn't_ land on — so a selectable object can hear "something else was clicked" and deselect itself (see [Deselection in solid-three](./deselection-in-solid-three.md)). Unlike r3f's miss, these respect `stopPropagation`. The same pass regrouped the registries by behaviour (missable / movable / default) but kept them keyed per type. The override prop also lands here (a `pointerEvents` boolean, soon renamed `raycastable`).
 
 Two things change at once: the miss returns at **both levels** — per-object "not-me" (the complement set) and a canvas total-miss — and per-type occlusion, in place silently since 2024, becomes _observable_ for the first time (the miss is what reveals it).
 
@@ -187,7 +189,7 @@ Was per-type _better_? Not clearly. Union's behaviour (a click on a visible `onW
 
 ### Jun 2026 — #66, the source-agnostic refactor (a silent occlusion flip)
 
-`#66` (`c5db8e28`, 2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases. As collateral, it **collapsed the per-gesture registries back into one** — every handler object went into a single `eventRegistry` again, regardless of gesture (`addEventListener(object, _type)` now ignores `_type`).
+`#66` (2026-06-05) rebuilt dispatch around a source-agnostic `Pointer` + `EventRaycaster` + `DOMPointerManager` (so XR controllers could feed the same system) and dropped the `onMouse*` aliases. As collateral, it **collapsed the per-gesture registries back into one** — every handler object went into a single `eventRegistry` again, regardless of gesture (`addEventListener(object, _type)` now ignores `_type`).
 
 That flipped occlusion back to union. Changing occlusion wasn't the goal — the collapse served source-agnosticism, and the flip was a side effect. The point isn't that union is worse than per-type — it's that a whole axis of behaviour changed and **nothing noticed**. No test caught it: the suite pinned _which registry_ an object lands in (routing), not _what happens when you click_ (behaviour). Occlusion flipped invisibly, on a refactor that wasn't even about occlusion. (The fork in Future repeats this exact pattern on a different axis.)
 
@@ -226,7 +228,7 @@ Same code as Aug 2025, opposite result on _click B_: union makes B a hit, so the
 
 ### Jun 2026 — #69 / #72, capture and typing
 
-Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` event API (#69, `2f321abe`, 2026-06-07); a typed dispatched event replacing the `any` bag (#72, `0c61cbc0`, 2026-06-07). The `*Missed` handlers rode through both unchanged. This — union registry + `*Missed` — is what's merged on `next` today. The six axes, and all three probes, are unchanged from `#66`: capture and typing touch the dispatch plumbing, not any axis.
+Pointer capture + reactive `hasPointerCapture` + the `object` / `currentObject` event API (#69, 2026-06-07); a typed dispatched event replacing the `any` bag (#72, 2026-06-07). The `*Missed` handlers rode through both unchanged. This — union registry + `*Missed` — is what's merged on `next` today. The six axes, and all three probes, are unchanged from `#66`: capture and typing touch the dispatch plumbing, not any axis.
 
 ## Now — what `next` does today, exactly
 
@@ -250,10 +252,10 @@ Two structural notes carried from the companion threads: solid-three's `<Canvas 
 Two **unmerged** branches (both 2026-06-08) propose replacing `*Missed` — _parallel proposals_, not a sequence. Both drop per-object "not-me" (the miss model becomes void-only) and move to a tres-shaped, void-only model. The doc has framed them as differing only in **void delivery** — _how you ask for the void_:
 
 ```jsx
-// #75 (feat/void-events; d25e9e3d, b1671bcb) — a dedicated canvas handler per gesture
+// #75 (feat/void-events) — a dedicated canvas handler per gesture
 <Canvas onVoidClick={() => deselect()} />
 
-// #76 (feat/void-via-event-object; dad769e) — the ordinary canvas handler; void = no object
+// #76 (feat/void-via-event-object) — the ordinary canvas handler; void = no object
 <Canvas onClick={e => { if (!e.object) deselect() }} />
 ```
 
@@ -353,3 +355,37 @@ Line the two probe tables up and only one row differs — **click B**: #75 clear
 - **solid-three is the only one of the four with general canvas-level 3D handlers.** Its `<Canvas onClick>` (and every canvas pointer prop) is wired into the pointer system — a `context.props` callback fired after bubbling, carrying `event.object` (undefined on a void). r3f's and TresJS's `<Canvas onClick>` are plain DOM; Threlte has no canvas handler at all. That property is what makes #76's `event.object` model expressible — and it's unprecedented in the prior art.
 - **Object override is opt-out only**, via a `raycastable={false}` prop (r3f's counterpart is `raycast={null}`) — like r3f, there's no way to opt a handler-less object _in_.
 - **Event raycasting de-dups on targets, not results.** r3f raycasts each handler object's subtree separately, then de-dups the hits — so overlapping subtrees are ray-tested more than once and the duplicates are thrown away _after_ the work is done. solid-three instead collects the registry into one de-duplicated set (`castRegistry`) and runs a single non-recursive pass, so each mesh is intersected once. Under deeply nested interactive hierarchies that avoids the repeated ray-vs-geometry work; on flat scenes it's a wash. The saving is mechanical — not benchmarked here.
+
+
+## At a glance — every axis across the timeline
+
+**Bold** marks an axis that moved from the column to its left; #75 and #76 are parallel forks off `#66`, so their bold marks a move from `#66`.
+
+| Axis | 2023 | 2024 | Aug 2025 | #66 / now | #75 | #76 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Occlusion | `union` | **`per-type`** | `per-type` | **`union`** | `union` | `union` |
+| Propagation | `tunnel + bubble` | `tunnel + bubble` | `tunnel + bubble` | `tunnel + bubble` | `tunnel + bubble` | `tunnel + bubble` |
+| Occlusion override | `none` | `none` | **`raycastable`** | `raycastable` | `raycastable` | `raycastable` |
+| Void participation | `union` | **`via per-type`** | `via per-type` | **`union`** | **`gesture-scoped`** | `union` |
+| Miss model | `void + not-me` | **`none`** | **`void + not-me`** | `void + not-me` | **`void only`** | **`void only`** |
+| Void delivery | `onPointerMissed` | **`—`** | **`*Missed`** | `*Missed` | **`onVoid*`** | **`event.object`** |
+
+Read across: **occlusion** swings union → per-type → union (twice, both by accident); **propagation** never moves; **participation** is the axis the fork splits — #75 and #76 land on different values, though the fork is sold as a question of delivery.
+
+
+## Commits referenced
+
+From the un-squashed history (`next-dirty`):
+
+| Change | Commit(s) | Date |
+| --- | --- | --- |
+| `onPointerMissed` added (PR #8) | `dd794de1` | 2023-05-22 |
+| Flat `src/events.ts`, no bubbling | `cc02bab4` | 2024-04-11 |
+| Bubbling restored ("add event-bubbling") | `8d1acba3` | 2024-04-15 |
+| `*Missed` split per gesture | `80f579c6`, `7148625d` | 2025-08-04 |
+| Registries regrouped by behaviour | `a0ffc80f` | 2025-08-04 |
+| #66 — source-agnostic dispatch | `c5db8e28` | 2026-06-05 |
+| #69 — pointer capture + `object` / `currentObject` | `2f321abe` | 2026-06-07 |
+| #72 — typed dispatched event | `0c61cbc0` | 2026-06-07 |
+| #75 — `onVoid*` (feat/void-events) | `d25e9e3d`, `b1671bcb` | 2026-06-08 |
+| #76 — `event.object` (feat/void-via-event-object) | `dad769e` | 2026-06-08 |
