@@ -80,6 +80,8 @@ Each probe carries two of the axes that actually move; propagation, which never 
 
 solid-three began as a close port of r3f, and so did its event system: a single `interaction` array (**union** occlusion), `eventCount`, `onPointerMissed`, and r3f's **full** propagation — z-depth tunnel _and_ ancestor bubble. `onPointerMissed` arrived via PR #8 (`dd794de1`, 2023-05-22).
 
+#### Axes
+
 | Axis | 2023 — r3f port |
 | --- | --- |
 | Occlusion | `union` |
@@ -88,6 +90,8 @@ solid-three began as a close port of r3f, and so did its event system: a single 
 | Void participation | `union` |
 | Miss model | `void + not-me` |
 | Void delivery | `onPointerMissed` |
+
+#### Probe
 
 ```jsx
 <Canvas onPointerMissed={clearSelection}>
@@ -105,6 +109,8 @@ solid-three began as a close port of r3f, and so did its event system: a single 
 | Click B | silent — union makes B a hit | A silent |
 | G's child | silent — a hit | G silent |
 
+#### How it works
+
 r3f's per-object miss fires _only_ on a total miss, so a real hit — clicking B or G's child — triggers nothing. No Surprise B yet.
 
 ### 2024 — rebuilt from scratch: bubbling lost then restored, occlusion quietly per-type
@@ -112,6 +118,8 @@ r3f's per-object miss fires _only_ on a total miss, so a real hit — clicking B
 In 2024 the event system was rebuilt from scratch (the flat `src/` layout). `cc02bab4` (2024-04-11) replaced it with a flat `src/events.ts` that had **no bubbling at all** and no `onPointerMissed`; `8d1acba3` ("add event-bubbling", 2024-04-15) added the ancestor walk back. So for a few days the event system had no propagation up the tree, then regained it.
 
 The rewrite also changed occlusion — though no commit says so. Its `eventRegistry` was a dict keyed by event type: one object list per gesture (`eventRegistry.onClick`, `eventRegistry.onWheel`, …), and a click raycast only its own bucket (`intersectObjects(eventRegistry[type], true)`). An `onWheel`-only object was therefore never in the `onClick` bucket. That flipped occlusion from the **union** the 2023 port inherited from r3f to **per-type** — an emergent property of keying the registry by type, not a decision anyone recorded. The effect stayed invisible until `*Missed` arrived to expose it.
+
+#### Axes
 
 | Axis | 2024 — rewrite |
 | --- | --- |
@@ -121,6 +129,8 @@ The rewrite also changed occlusion — though no commit says so. Its `eventRegis
 | Void participation | **`via per-type`** |
 | Miss model | **`none`** |
 | Void delivery | **`—`** |
+
+#### Probe
 
 ```jsx
 <Canvas>                                     // no miss handler exists
@@ -140,6 +150,8 @@ A burst of same-day commits (2025-08-04) brought the miss back — and split it 
 
 Two things change at once: the miss returns at **both levels** — per-object "not-me" (the complement set) and a canvas total-miss — and per-type occlusion, in place silently since 2024, becomes _observable_ for the first time (the miss is what reveals it).
 
+#### Axes
+
 | Axis | Aug 2025 — `*Missed` |
 | --- | --- |
 | Occlusion | `per-type` |
@@ -148,6 +160,8 @@ Two things change at once: the miss returns at **both levels** — per-object "n
 | Void participation | `via per-type` |
 | Miss model | **`void + not-me`** |
 | Void delivery | **`*Missed`** |
+
+#### Probe
 
 ```jsx
 <Canvas onClickMissed={clearSelection}>
@@ -165,6 +179,8 @@ Two things change at once: the miss returns at **both levels** — per-object "n
 | Click B | **fires → clears** — per-type: B isn't in the click bucket | A fires |
 | G's child | silent — a hit | **G fires — _Surprise B_** |
 
+#### How it works
+
 Click B flips to clearing — per-type: B sits only in the wheel bucket, so a click ray never tests it, and the click is a total miss. And _Surprise B_ appears. It falls out of what `*Missed` is taken to _mean_: not "the click didn't land on this object" (geometry) but "this object's handler wasn't called once the canvas event was handled" (delivery). Clicking G's child lands the ray _inside_ G, yet `stopPropagation` keeps G's own handler from running — so under the handler-based reading G "missed," and its `onClickMissed` fires. Mechanically: the bubble halts before G, so G is never crossed off the missed set, and the complement pass re-raycasts the leftovers but can't rescue a geometry-less ancestor. r3f never had this — its miss was total-miss-only; the complement set introduced it.
 
 Was per-type _better_? Not clearly. Union's behaviour (a click on a visible `onWheel` box is a hit, so it doesn't deselect) is a defensible default; per-type lets clicks fall _through_ objects that don't handle them, which can surprise the other way. Per-type's one clear edge is performance: each gesture raycasts only its own, smaller bucket. Either way, nobody had decided it — and an undecided behaviour is an easily-lost one. The next stage is how.
@@ -175,6 +191,8 @@ Was per-type _better_? Not clearly. Union's behaviour (a click on a visible `onW
 
 That flipped occlusion back to union. Changing occlusion wasn't the goal — the collapse served source-agnosticism, and the flip was a side effect. The point isn't that union is worse than per-type — it's that a whole axis of behaviour changed and **nothing noticed**. No test caught it: the suite pinned _which registry_ an object lands in (routing), not _what happens when you click_ (behaviour). Occlusion flipped invisibly, on a refactor that wasn't even about occlusion. (The fork in Future repeats this exact pattern on a different axis.)
 
+#### Axes
+
 | Axis | `#66` — now |
 | --- | --- |
 | Occlusion | **`union`** |
@@ -183,6 +201,8 @@ That flipped occlusion back to union. Changing occlusion wasn't the goal — the
 | Void participation | **`union`** (accidental) |
 | Miss model | `void + not-me` |
 | Void delivery | `*Missed` |
+
+#### Probe
 
 ```jsx
 <Canvas onClickMissed={clearSelection}>      // same code as Aug 2025
@@ -199,6 +219,8 @@ That flipped occlusion back to union. Changing occlusion wasn't the goal — the
 | Empty space | fires → clears | A fires |
 | Click B | **silent — union makes B a hit** | A fires |
 | G's child | silent — a hit | G fires — _Surprise B_ |
+
+#### How it works
 
 Same code as Aug 2025, opposite result on _click B_: union makes B a hit, so the canvas miss stays silent (selection persists) — but A's own `onClickMissed` still fires (the complement set: A wasn't hit). The centralized deselect breaks; the decentralized one keeps working. Surprise B is unchanged.
 
@@ -239,6 +261,8 @@ But reading the source shows they also disagree on **participation**, which thos
 
 A dedicated void handler per gesture (`onVoidClick`, `onVoidWheel`, …) on `<Canvas>`, fired when a gesture resolves to nothing.
 
+#### Axes
+
 | Axis | #75 (`onVoid*`) |
 | --- | --- |
 | Occlusion | `union` |
@@ -247,6 +271,8 @@ A dedicated void handler per gesture (`onVoidClick`, `onVoidWheel`, …) on `<Ca
 | Void participation | **`gesture-scoped`** |
 | Miss model | **`void only`** |
 | Void delivery | **`onVoid*`** |
+
+#### Probe
 
 ```jsx
 <Canvas onVoidClick={clearSelection}>
@@ -264,11 +290,17 @@ A dedicated void handler per gesture (`onVoidClick`, `onVoidWheel`, …) on `<Ca
 | Click B | **fires → clears** — gesture-scoped: no `onClick` in B's chain | n/a |
 | G's child | silent — a click handler ran (and stopped propagation) | n/a |
 
-Dispatch tracks `firedOnObject`, set true only when a handler _for the dispatched gesture_ runs somewhere in a hit's bubble chain (`propagate` returns it; `finishVoidable` fires `onVoid<Kind>` only when it's false). Clicking B finds no `onClick` in its chain → `firedOnObject` stays false → `onVoidClick` fires. This is **gesture-scoped (option b)**, on purpose — the tests assert it ("gesture-scoped parity, chain-aware"): a click on the wheel-only box reads as a void. The channel is **exclusive**: `onClick` ("a real click was handled") and `onVoidClick` ("none was") never both fire.
+#### How it works
+
+- **Mechanism** — dispatch tracks `firedOnObject`, set true only when a handler _for the dispatched gesture_ runs somewhere in a hit's bubble chain (`propagate` returns it; `finishVoidable` fires `onVoid<Kind>` only when it's false).
+- **Click B** — no `onClick` in B's chain → `firedOnObject` stays false → `onVoidClick` fires: a click on the wheel-only box reads as a void. This is **gesture-scoped (option b)**, on purpose — the tests assert it ("gesture-scoped parity, chain-aware").
+- **Channel** — **exclusive**: `onClick` ("a real click was handled") and `onVoidClick` ("none was") never both fire.
 
 ### #76 — `event.object`, read off the canvas handler
 
 No new handler: the ordinary canvas `onClick` (and every canvas pointer prop) fires on every gesture, with `event.object` set to the hit or `undefined` on a void — so `if (!e.object)` is the empty-space test.
+
+#### Axes
 
 | Axis | #76 (`event.object`) |
 | --- | --- |
@@ -278,6 +310,8 @@ No new handler: the ordinary canvas `onClick` (and every canvas pointer prop) fi
 | Void participation | `union` |
 | Miss model | **`void only`** |
 | Void delivery | **`event.object`** |
+
+#### Probe
 
 ```jsx
 <Canvas onClick={e => { if (!e.object) clearSelection() }}>
@@ -295,7 +329,11 @@ No new handler: the ordinary canvas `onClick` (and every canvas pointer prop) fi
 | Click B | `e.object` is B → stays selected | n/a |
 | G's child | `stopPropagation` → canvas handler never fires → nothing | n/a |
 
-`click()` routes through the shared `propagate()`. Unless an object handler calls `stopPropagation`, that fires the canvas handler with `event.object = intersections[0]?.object` — the hit, or `undefined` on a total miss. Clicking B is a hit, so `event.object` is B (not `undefined`) and the guard is false. This is **union-by-listener (option a)**, arrived at _incidentally_ (it's just what reading `intersections[0]` gives you): a click on the wheel-only box stays a hit, not a void. The channel is **one** — `onClick` carries both hit and void (whenever propagation reaches the canvas), so the single handler branches on `event.object`; a child that stops propagation suppresses it entirely.
+#### How it works
+
+- **Mechanism** — `click()` routes through the shared `propagate()`; the canvas handler fires (unless an object handler called `stopPropagation`) with `event.object = intersections[0]?.object` — the hit, or `undefined` on a total miss.
+- **Click B** — B is a hit, so `event.object` is B (not `undefined`) and the guard is false: the wheel-only box stays a hit, not a void. This is **union-by-listener (option a)**, arrived at _incidentally_ — it's just what reading `intersections[0]` gives you.
+- **Channel** — **one**: `onClick` carries both hit and void (whenever propagation reaches the canvas), so the single handler branches on `event.object`; a child that stops propagation suppresses it entirely.
 
 ### The hidden fork: participation
 
